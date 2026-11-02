@@ -15,6 +15,7 @@ func _ready() -> void:
 	var t := Label.new(); t.text = "Paused"; t.add_theme_font_size_override("font_size", 30); v.add_child(t)
 	first = _button(v, "Resume", func(): _show(false))
 	_button(v, "Restart mission", func(): _show(false); get_tree().reload_current_scene())
+	_button(v, "Return to galaxy map", func(): _show(false); get_tree().change_scene_to_file("res://scenes/galaxy.tscn"))
 	_button(v, "Quit to desktop", func(): get_tree().quit())
 	var c := Label.new(); c.add_theme_font_size_override("font_size", 15); c.modulate = Color(1, 1, 1, .8)
 	c.text = "PS5 controller: left stick move, L3 sprint, right stick aim, R2 fire, L2 steady aim,\nR1 grenade, L1 artillery, Cross dive, vault or climb, Circle crouch, Square reload, Options pause.\n\nKeyboard and mouse: WASD move, Shift sprint, mouse aim, left button fire, right button steady aim,\nG grenade, B artillery, Space dive, vault or climb, C crouch, R reload, Esc pause, F11 full screen."

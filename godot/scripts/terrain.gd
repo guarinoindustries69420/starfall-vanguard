@@ -8,7 +8,7 @@ class_name Terrain
 const RES := 0.5                  # metres between height samples
 const CH := 40                    # cells per chunk side (20 m)
 const MIN_H := -3.5               # deepest the ground can be dug
-const SURF_COL := [Color("5a4a36"), Color("2e2f33"), Color("5f5f62"), Color("66625b")]   # dirt, asphalt, kerb, pavement
+var surf_col := [Color("5a4a36"), Color("2e2f33"), Color("5f5f62"), Color("66625b")]   # dirt, asphalt, kerb, pavement
 
 var size := 0.0; var n := 0; var origin := 0.0
 var h := PackedFloat32Array(); var surf := PackedByteArray(); var scorch := PackedFloat32Array()
@@ -80,7 +80,7 @@ func _chunk(ci: int, cj: int) -> void:
 		for i in range(i0, i1 + 1):
 			var k := j * n + i
 			verts.append(Vector3(origin + i * RES, h[k], origin + j * RES)); norms.append(_norm(i, j))
-			var c: Color = SURF_COL[surf[k]]
+			var c: Color = surf_col[surf[k]]
 			var s := scorch[k]
 			if h[k] < -.05 and surf[k] == 0: c = c.darkened(clamp(-h[k] * .12, 0.0, .25))   # freshly turned earth is darker
 			cols.append(c.lerp(Color("1b1714"), s * .8))

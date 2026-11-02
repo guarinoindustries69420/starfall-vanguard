@@ -10,7 +10,7 @@ const CAM_OFF := Vector3(0, 15, 9.5)      # camera offset from the player
 const L_WORLD := 1; const L_PLAYER := 2; const L_ENEMY := 4
 const SEED := 7
 
-var map_key := "city_%d" % SEED
+var map_key := "city_%d" % SEED       # replaced in _ready by the world being fought over
 var player: Unit
 var cam: Camera3D
 var terrain: Terrain
@@ -28,7 +28,7 @@ var kills := 0
 var test_t := 0.0; var test := {}
 
 func _ready() -> void:
-	rng.seed = SEED
+	map_key = Game.mission_key(); rng.seed = Game.mission_seed()
 	_environment()
 	_ground()
 	_city()
@@ -80,7 +80,11 @@ func _ground() -> void:
 	var alb := _noise_tex(.02, false); alb.color_ramp = gr; m.albedo_texture = alb
 	m.normal_enabled = true; m.normal_texture = _noise_tex(.04, true, 4, 3.0); m.normal_scale = .7
 	m.uv1_triplanar = true; m.uv1_world_triplanar = true; m.uv1_scale = Vector3.ONE * .12
-	terrain = Terrain.new(); add_child(terrain); terrain.setup(SIZE + 40, m, L_WORLD)
+	terrain = Terrain.new(); add_child(terrain)
+	if Game.current_world >= 0:                      # bare earth takes the colour of this world's ground
+		var gc: Color = Galaxy.BIOMES[Game.galaxy.worlds[Game.current_world].biome].ground
+		terrain.surf_col[0] = gc
+	terrain.setup(SIZE + 40, m, L_WORLD)
 	terrain.paint_rect(-SIZE / 2, -SIZE / 2, SIZE / 2, SIZE / 2, 3, .12)
 
 # ---------- city: avenues, side streets, alleys, breakable buildings ----------
@@ -406,7 +410,10 @@ func _hud() -> void:
 	hud = CanvasLayer.new(); add_child(hud)
 	hud_hp = ProgressBar.new(); hud_hp.position = Vector2(24, 24); hud_hp.size = Vector2(320, 16); hud_hp.max_value = 100; hud_hp.show_percentage = false; hud.add_child(hud_hp)
 	hud_label = Label.new(); hud_label.position = Vector2(24, 46); hud_label.add_theme_font_size_override("font_size", 20); hud.add_child(hud_label)
-	hud_msg = Label.new(); hud_msg.text = "Starfall Vanguard · Godot build · city mission"; hud_msg.position = Vector2(24, 76); hud_msg.modulate = Color(1, 1, 1, .6); hud.add_child(hud_msg)
+	hud_msg = Label.new(); hud_msg.text = "Starfall Vanguard · city mission"
+	if Game.current_world >= 0:
+		var w: Dictionary = Game.galaxy.worlds[Game.current_world]
+		hud_msg.text = "%s · %s · fighting the %s" % [w.name, Galaxy.BIOMES[w.biome].name, Galaxy.FAC[Game.enemy_faction].name]; hud_msg.position = Vector2(24, 76); hud_msg.modulate = Color(1, 1, 1, .6); hud.add_child(hud_msg)
 	hud_hint = Label.new(); hud_hint.anchor_top = 1.0; hud_hint.anchor_bottom = 1.0; hud_hint.position = Vector2(24, -40); hud_hint.offset_top = -40
 	hud_hint.add_theme_font_size_override("font_size", 16); hud_hint.modulate = Color(1, 1, 1, .75); hud.add_child(hud_hint)
 

@@ -9,8 +9,11 @@ const FACTIONS := {
 	"reach": {"name": "Free Reach", "base": Color("ef8f3a"), "trim": Color("6e3610"), "acc": Color("ffd6a8")},
 	"concord": {"name": "Sovereign Concord", "base": Color("e8e2d6"), "trim": Color("8e2a22"), "acc": Color("d4a640")},
 	"compact": {"name": "Meridian Compact", "base": Color("4fa8e8"), "trim": Color("123a5c"), "acc": Color("d4ebfb")},
+	"swarm": {"name": "Hollow Swarm", "base": Color("4a5a3a"), "trim": Color("1c2414"), "acc": Color("a8de5c")},
 	"wyrm": {"name": "Wyrm Lord", "base": Color("1d2740"), "trim": Color("0c0f17"), "acc": Color("d4a640")},
 }
+const GALAXY_SEED := 31
+const CAMPAIGN_PATH := "user://campaign.json"
 const SAVE_PATH := "user://battlefields.json"
 
 # Prompts for each action, for the pad (PS5 glyph names) and for keyboard and mouse.
@@ -26,6 +29,8 @@ var fresh := false              # --sv-fresh: forget saved battle damage before 
 var kit: Node3D = null
 var using_pad := false          # true while the last input came from a controller
 var battlefields := {}          # map key -> {"ruins": [column ids], "craters": [[x, z, r], ...]}
+var galaxy: Galaxy              # the galaxy map, regenerated from GALAXY_SEED; only ownership is saved
+var current_world := -1         # the world being fought over, or -1 for the stand-alone test city
 
 func _ready() -> void:
 	var args := OS.get_cmdline_user_args()
@@ -53,6 +58,66 @@ func _ready() -> void:
 	if scene: kit = scene.instantiate()
 	_load()
 	if fresh: battlefields = {}; _save()
+	galaxy = Galaxy.new(); galaxy.generate(GALAXY_SEED)
+	if not fresh and FileAccess.file_exists(CAMPAIGN_PATH):
+		var f := FileAccess.open(CAMPAIGN_PATH, FileAccess.READ)
+		var d = JSON.parse_string(f.get_as_text()) if f else null
+		if d is Dictionary and d.get("seed", -1) == GALAXY_SEED:
+			galaxy.apply_owners(d.get("owners", {})); hm = d.get("hearts", {})
+	elif fresh and FileAccess.file_exists(CAMPAIGN_PATH): DirAccess.remove_absolute(ProjectSettings.globalize_path(CAMPAIGN_PATH))
+
+func save_campaign() -> void:
+	var f := FileAccess.open(CAMPAIGN_PATH, FileAccess.WRITE)
+	if f: f.store_string(JSON.stringify({"seed": GALAXY_SEED, "player": player_faction, "owners": galaxy.owners(), "hearts": hm}))
+
+# drop onto a world: the mission there fights whoever holds or raids it, on that world's ground, with its own saved damage
+func deploy(i: int) -> void:
+	current_world = i; enemy_faction = galaxy.foe_of(i, player_faction)
+	get_tree().change_scene_to_file("res://scenes/main.tscn")
+
+# ---- hearts and minds: unclaimed worlds are won with events, not by force ----
+const EVENTS := {
+	"race": {"name": "Skimmer Rally", "script": "res://scripts/games/race.gd", "blurb": "Three laps of a canyon circuit in hover skimmers. Finish in the top two and ahead of the rival's ace."},
+	"asteroids": {"name": "Asteroid Rush", "script": "res://scripts/games/asteroids.gd", "blurb": "A minute in a drifting ore field. Cut rocks apart and haul more ore than the rival miner."},
+	"gravball": {"name": "Gravball", "script": "res://scripts/games/gravball.gd", "blurb": "Two against two in a low-gravity arena. Outscore the rival pair."},
+	"rings": {"name": "Ring Run", "script": "res://scripts/games/rings.gd", "blurb": "Full throttle through a canyon of beacon rings. Beat the rival pilot's time."},
+	"gala": {"name": "Marksman Gala", "script": "res://scripts/games/gala.gd", "blurb": "A shooting exhibition in the town square. Spare the civilian cut-outs and outscore the rival marksman."},
+	"sumo": {"name": "Cargo Sumo", "script": "res://scripts/games/sumo.gd", "blurb": "Heavy tugs on a shrinking platform. Shove the rival's hauler off before you go over."},
+}
+const HEART_GAIN := {"low": 34, "med": 26, "high": 20, "fort": 16}
+var hm := {}                    # world id (string) -> {"me": 0..100, "foe": 0..100, "n": events played}
+
+func hearts(i: int) -> Dictionary:
+	var k := str(i)
+	if not hm.has(k): hm[k] = {"me": 0, "foe": 10, "n": 0}
+	return hm[k]
+
+# the three events on offer at a world; the line-up moves on after each one is played
+func event_card(i: int) -> Array:
+	var keys := EVENTS.keys(); var h := hearts(i); var out: Array = []
+	for k in 3: out.append(keys[(i + int(h.n) + k * 2) % keys.size()])
+	return out
+
+# the result of one event: a win sways the crowd your way, a loss sways it to the rival. At 100 the world changes hands.
+func apply_event(i: int, won: bool) -> String:
+	var w: Dictionary = galaxy.worlds[i]; var h := hearts(i); var g: int = HEART_GAIN[w.res]
+	h.n = int(h.n) + 1
+	if won:
+		h.me = min(100, int(h.me) + g); h.foe = max(0, int(h.foe) - g / 4)
+	else:
+		h.foe = min(100, int(h.foe) + int(g * .8))
+	var flip := ""
+	if int(h.me) >= 100: w.owner = player_faction; flip = "%s joins the %s." % [w.name, Galaxy.FAC[player_faction].name]
+	elif int(h.foe) >= 100: w.owner = w.foe; flip = "%s sides with the %s." % [w.name, Galaxy.FAC[w.foe].name]
+	save_campaign()
+	return flip
+
+func open_events(i: int) -> void:
+	current_world = i
+	get_tree().change_scene_to_file("res://scenes/events.tscn")
+
+func mission_key() -> String: return "world_%d" % current_world if current_world >= 0 else "city_7"
+func mission_seed() -> int: return 1000 + current_world * 97 if current_world >= 0 else 7
 
 func _action(a: String) -> void:
 	if not InputMap.has_action(a): InputMap.add_action(a, .25)
