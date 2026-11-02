@@ -1,5 +1,5 @@
 # Starfall Vanguard enemy models, built in Blender (bpy) and exported as GLB.
-# MIT License, Guarino Gaming Group (G3). Blender coords: X right, -Y forward (exports to glTF +Z), Z up.
+# MIT License. Copyright (c) 2026 Brian Guarino / Guarino Gaming Group (G³), a department of Guarino Industries LLC. Blender coords: X right, -Y forward (exports to glTF +Z), Z up.
 import bpy, bmesh, math, sys, os
 from mathutils import Vector, Matrix
 OUT=sys.argv[sys.argv.index('--')+1] if '--' in sys.argv else '/tmp/out'

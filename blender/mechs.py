@@ -1,4 +1,4 @@
-# Starfall Vanguard player mechs and mech weapons, built in Blender. MIT License, Guarino Gaming Group (G3).
+# Starfall Vanguard player mechs and mech weapons, built in Blender. MIT License. Copyright (c) 2026 Brian Guarino / Guarino Gaming Group (G³), a department of Guarino Industries LLC.
 import bpy,math,sys,os,importlib.util
 from mathutils import Vector
 here=os.path.dirname(os.path.abspath(__file__))

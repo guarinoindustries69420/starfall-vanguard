@@ -1,4 +1,4 @@
-# Starfall Vanguard objective props, built in Blender. MIT License, Guarino Gaming Group (G3).
+# Starfall Vanguard objective props, built in Blender. MIT License. Copyright (c) 2026 Brian Guarino / Guarino Gaming Group (G³), a department of Guarino Industries LLC.
 import bpy,math,sys,os
 sys.path.insert(0,os.path.dirname(os.path.abspath(__file__)))
 import importlib.util
