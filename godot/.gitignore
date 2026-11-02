@@ -1,0 +1,4 @@
+# Godot editor cache and per-machine files
+.godot/
+*.translation
+export_presets.cfg

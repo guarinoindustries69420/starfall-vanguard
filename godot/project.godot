@@ -1,0 +1,28 @@
+; Starfall Vanguard (Godot 4 desktop build)
+; MIT License. Copyright (c) 2026 Brian Guarino / Guarino Gaming Group (G3), a department of Guarino Industries LLC.
+config_version=5
+
+[application]
+config/name="Starfall Vanguard"
+config/description="Top-down mission shooter by Guarino Gaming Group (G3)."
+run/main_scene="res://scenes/main.tscn"
+config/features=PackedStringArray("4.3", "Forward Plus")
+config/icon="res://icon.svg"
+
+[autoload]
+Game="*res://scripts/game.gd"
+
+[display]
+window/size/viewport_width=1600
+window/size/viewport_height=900
+window/stretch/mode="canvas_items"
+
+[physics]
+3d/default_gravity=19.6
+common/physics_ticks_per_second=60
+
+[rendering]
+rendering_device/fallback_to_opengl3=true
+anti_aliasing/quality/msaa_3d=2
+lights_and_shadows/directional_shadow/size=4096
+environment/defaults/default_clear_color=Color(0.03,0.04,0.07,1)
