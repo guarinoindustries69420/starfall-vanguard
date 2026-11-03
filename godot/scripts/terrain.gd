@@ -14,13 +14,43 @@ var size := 0.0; var n := 0; var origin := 0.0
 var h := PackedFloat32Array(); var surf := PackedByteArray(); var scorch := PackedFloat32Array()
 var chunks := {}                  # Vector2i -> MeshInstance3D
 var shape: HeightMapShape3D
-var mat: StandardMaterial3D
+var mat: Material
+
+# Ground shader: paving and kerbs take their colour from the vertex colour over a fine detail texture; bare earth
+# (vertex alpha 1) shows the world's photographed ground instead, when there is one. Scorch darkens both.
+const SHADER := """
+shader_type spatial;
+render_mode diffuse_burley, specular_schlick_ggx;
+uniform sampler2D detail_tex : source_color, filter_linear_mipmap, repeat_enable;
+uniform sampler2D earth_tex : source_color, filter_linear_mipmap_anisotropic, repeat_enable;
+uniform sampler2D normal_tex : hint_normal, filter_linear_mipmap, repeat_enable;
+uniform bool has_earth = false;
+uniform float detail_scale = 0.12;
+uniform float earth_scale = 0.09;
+uniform float earth_tint = 1.0;
+varying vec3 wpos;
+void vertex() { wpos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz; }
+void fragment() {
+	vec3 base = texture(detail_tex, wpos.xz * detail_scale).rgb;
+	if (has_earth) base = mix(base, texture(earth_tex, wpos.xz * earth_scale).rgb * earth_tint, COLOR.a);
+	ALBEDO = COLOR.rgb * base;
+	ROUGHNESS = 0.92;
+	NORMAL_MAP = texture(normal_tex, wpos.xz * 0.04).rgb;
+	NORMAL_MAP_DEPTH = 0.7;
+}
+"""
+static func make_material(detail: Texture2D, normal: Texture2D, earth: Texture2D, tint: float) -> ShaderMaterial:
+	var sm := ShaderMaterial.new(); var sh := Shader.new(); sh.code = SHADER; sm.shader = sh
+	sm.set_shader_parameter("detail_tex", detail); sm.set_shader_parameter("normal_tex", normal)
+	sm.set_shader_parameter("has_earth", earth != null); sm.set_shader_parameter("earth_tint", tint)
+	if earth: sm.set_shader_parameter("earth_tex", earth)
+	return sm
 var body: StaticBody3D
 
-func setup(sz: float, material: StandardMaterial3D, layer: int) -> void:
+func setup(sz: float, material: Material, layer: int) -> void:
 	size = sz; origin = -sz / 2.0; n = int(round(sz / RES)) + 1
 	h.resize(n * n); h.fill(0.0); surf.resize(n * n); surf.fill(0); scorch.resize(n * n); scorch.fill(0.0)
-	mat = material; mat.vertex_color_use_as_albedo = true
+	mat = material
 	body = StaticBody3D.new(); body.collision_layer = layer; body.collision_mask = 0; add_child(body)
 	var cs := CollisionShape3D.new(); shape = HeightMapShape3D.new(); shape.map_width = n; shape.map_depth = n
 	cs.shape = shape; cs.scale = Vector3(RES, 1, RES); body.add_child(cs)
@@ -83,7 +113,8 @@ func _chunk(ci: int, cj: int) -> void:
 			var c: Color = surf_col[surf[k]]
 			var s := scorch[k]
 			if h[k] < -.05 and surf[k] == 0: c = c.darkened(clamp(-h[k] * .12, 0.0, .25))   # freshly turned earth is darker
-			cols.append(c.lerp(Color("1b1714"), s * .8))
+			var vc := c.lerp(Color("1b1714"), s * .8); vc.a = 1.0 if surf[k] == 0 else 0.0     # alpha marks bare earth
+			cols.append(vc)
 	for j in range(j1 - j0):
 		for i in range(w - 1):
 			var a := j * w + i

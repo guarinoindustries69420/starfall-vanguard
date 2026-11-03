@@ -10,6 +10,7 @@ signal finished(won: bool, summary: String)
 var rival := "swarm"            # the faction competing for the crowd
 var biome := "desert"
 var world_name := ""
+var res := "med"                # the world's resistance: harder worlds have sharper rivals
 var t := 0.0                    # seconds since the start signal
 var countdown := 3.0
 var running := false; var done := false
@@ -22,8 +23,8 @@ func view() -> String: return "ground"      # "ground", "overhead" (high camera,
 func help_pad() -> String: return ""
 func help_keys() -> String: return ""
 
-func setup(rival_faction: String, world_biome: String, wname: String) -> void:
-	rival = rival_faction; biome = world_biome; world_name = wname; autopilot = Game.test_mode
+func setup(rival_faction: String, world_biome: String, wname: String, world_res := "med") -> void:
+	rival = rival_faction; biome = world_biome; world_name = wname; res = world_res; autopilot = Game.test_mode
 
 func _ready() -> void:
 	_environment(); _hud(); build()
@@ -65,9 +66,10 @@ func _hud() -> void:
 	lbl_big = Label.new(); lbl_big.set_anchors_preset(Control.PRESET_CENTER); lbl_big.position = Vector2(-300, -60); lbl_big.size = Vector2(600, 120)
 	lbl_big.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER; lbl_big.add_theme_font_size_override("font_size", 64); hud.add_child(lbl_big)
 	lbl_help = Label.new(); lbl_help.anchor_top = 1; lbl_help.anchor_bottom = 1; lbl_help.offset_top = -40; lbl_help.offset_left = 28
-	lbl_help.add_theme_font_size_override("font_size", 16); lbl_help.modulate = Color(1, 1, 1, .8); hud.add_child(lbl_help)
+	lbl_help.add_theme_font_size_override("font_size", 16); lbl_help.modulate = Color(1, 1, 1, .9); hud.add_child(lbl_help)
+	for l in [lbl_title, lbl_score, lbl_big, lbl_help]: Game.readable(l)
 
-func _process(dt: float) -> void:
+func _physics_process(dt: float) -> void:
 	lbl_help.text = help_pad() if Game.using_pad else help_keys()
 	if done: return
 	if not running:

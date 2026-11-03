@@ -1,8 +1,18 @@
-Starfall Vanguard asset batch, 2 November 2026
+Starfall Vanguard assets
 Guarino Gaming Group (G3), a department of Guarino Industries LLC
 
-Ground textures (ice, jungle, ash, toxic): generated with Z-Image Turbo (Hugging Face Space mcp-tools/Z-Image-Turbo), seeds 4101 to 4104, then made seamless and evenly lit with PIL.
-Trooper concept (trooper_concept_drakeguard.png): Z-Image Turbo, seed 4201. Original design.
-NINE voice lines (nine_*.ogg): Kokoro-82M (Apache 2.0) through kokoro-onnx, run locally. The voice is a 60/40 blend of the stock bf_emma and af_nova styles, passed through a comm-channel filter in ffmpeg. No real person's voice was cloned.
+Ground textures (assets/ground/), one per biome:
+- ice, jungle, ash, toxic: Z-Image Turbo (Hugging Face Space mcp-tools/Z-Image-Turbo), seeds 4101 to 4104, 2 November 2026.
+- desert, forest, crystal: Z-Image Turbo, seeds 4105 to 4107, 3 November 2026.
+- mesa and archipelago: made here from the desert photo (recoloured with numpy), because the free GPU allowance ran out.
+- moon: made here from the ash photo (greyscale, lifted). magma: the ash photo darkened, with glowing lava cracks drawn in PIL.
+All were evened out for light and made to tile with an overlap-wrap cross-fade (each pixel comes from one place in the
+photo, or a blend of two different places at the wrap), then resized with wraparound, so no feature repeats inside a tile.
 
-Not done: the Chatterbox Space was not used, because its only built-in voice is a reference clip of a real performer. TRELLIS image-to-3D (trellis-community/TRELLIS) returned "Not Found" on every endpoint, so no 3D model was made.
+Trooper concept (assets/concept/trooper_concept_drakeguard.png): Z-Image Turbo, seed 4201. Original design. A reference
+for later modelling; the TRELLIS image-to-3D Space returned "Not Found" on every endpoint, so no 3D model was made from it.
+
+NINE voice lines (assets/voice/nine_*.ogg): Kokoro-82M (Apache 2.0) through kokoro-onnx, run locally. The voice is a
+60/40 blend of the stock bf_emma and af_nova styles, passed through a comm-channel filter in ffmpeg and levelled to
+about -20.5 LUFS at 24 kHz. No real person's voice was cloned; the Chatterbox Space was not used because its only built-in
+voice is a reference clip of a real performer. nine_mission_won.ogg is ready for when missions get a win condition.

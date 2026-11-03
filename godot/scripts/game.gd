@@ -34,7 +34,8 @@ var current_world := -1         # the world being fought over, or -1 for the sta
 
 func _ready() -> void:
 	var args := OS.get_cmdline_user_args()
-	test_mode = "--sv-test" in args; fresh = "--sv-fresh" in args
+	test_mode = "--sv-test" in args
+	fresh = "--sv-fresh" in args and test_mode           # wiping saved battle damage is for tests only
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	_bind_keys("move_up", [KEY_W, KEY_UP]); _bind_keys("move_down", [KEY_S, KEY_DOWN])
 	_bind_keys("move_left", [KEY_A, KEY_LEFT]); _bind_keys("move_right", [KEY_D, KEY_RIGHT])
@@ -54,13 +55,18 @@ func _ready() -> void:
 	_bind_keys("fullscreen", [KEY_F11])
 	# menus: Cross confirms and Circle backs out, as on the console
 	InputMap.action_add_event("ui_cancel", _pad_ev(JOY_BUTTON_B))
+	InputMap.action_add_event("ui_accept", _pad_ev(JOY_BUTTON_A))
 	var scene: PackedScene = load("res://assets/trooper_kit.glb")
 	if scene: kit = scene.instantiate()
 	_load()
 	if fresh: battlefields = {}; _save()
 	galaxy = Galaxy.new(); galaxy.generate(GALAXY_SEED)
-	for a in args:                                   # --sv-world=N: start the mission on world N (for tests)
-		if a.begins_with("--sv-world="): current_world = int(a.split("=")[1])
+	for a in args:                                   # --sv-world=N: start the mission on world N (tests only)
+		if test_mode and a.begins_with("--sv-world="):
+			var v: String = a.get_slice("=", 1)
+			if v.is_valid_int() and int(v) >= 0 and int(v) < galaxy.worlds.size():
+				current_world = int(v); enemy_faction = galaxy.foe_of(current_world, player_faction)
+			else: push_warning("--sv-world needs a world number from 0 to %d; ignored" % (galaxy.worlds.size() - 1))
 	if not fresh and FileAccess.file_exists(CAMPAIGN_PATH):
 		var f := FileAccess.open(CAMPAIGN_PATH, FileAccess.READ)
 		var d = JSON.parse_string(f.get_as_text()) if f else null
@@ -94,10 +100,14 @@ func hearts(i: int) -> Dictionary:
 	if not hm.has(k): hm[k] = {"me": 0, "foe": 10, "n": 0}
 	return hm[k]
 
-# the three events on offer at a world; the line-up moves on after each one is played
+# the three events on offer at a world. Each world has its own running order of all the events; the card is three
+# neighbours in that order and moves on by one after each event, so every event comes round in turn.
 func event_card(i: int) -> Array:
-	var keys := EVENTS.keys(); var h := hearts(i); var out: Array = []
-	for k in 3: out.append(keys[(i + int(h.n) + k * 2) % keys.size()])
+	var keys: Array = EVENTS.keys(); var r := RandomNumberGenerator.new(); r.seed = 5000 + i
+	for k in range(keys.size() - 1, 0, -1):
+		var j := r.randi_range(0, k); var tmp = keys[k]; keys[k] = keys[j]; keys[j] = tmp
+	var h := hearts(i); var out: Array = []
+	for k in 3: out.append(keys[(int(h.n) + k) % keys.size()])
 	return out
 
 # the result of one event: a win sways the crowd your way, a loss sways it to the rival. At 100 the world changes hands.
@@ -110,7 +120,9 @@ func apply_event(i: int, won: bool) -> String:
 		h.foe = min(100, int(h.foe) + int(g * .8))
 	var flip := ""
 	if int(h.me) >= 100: w.owner = player_faction; flip = "%s joins the %s." % [w.name, Galaxy.FAC[player_faction].name]
-	elif int(h.foe) >= 100: w.owner = w.foe; flip = "%s sides with the %s." % [w.name, Galaxy.FAC[w.foe].name]
+	elif int(h.foe) >= 100:
+		var r := galaxy.raider_of(i, player_faction)
+		w.owner = r; flip = "%s sides with the %s." % [w.name, Galaxy.FAC[r].name]
 	save_campaign()
 	return flip
 
@@ -125,17 +137,43 @@ func ground_texture(biome: String) -> Texture2D:
 
 # ---- NINE, the ship's advisor, on the comm channel ----
 var voice: AudioStreamPlayer
-var said := {}                  # line -> time it was last spoken, so routine barks do not repeat every few seconds
+var said := {}
+const URGENT := ["world_joins", "world_lost", "mission_lost", "low_health", "barrage"]                  # line -> time it was last spoken, so routine barks do not repeat every few seconds
 func say(line: String, cooldown := 0.0) -> void:
 	var now := Time.get_ticks_msec() / 1000.0
 	if cooldown > 0 and now - said.get(line, -1e9) < cooldown: return
 	var path := "res://assets/voice/nine_%s.ogg" % line
 	if not ResourceLoader.exists(path): return
-	if voice == null: voice = AudioStreamPlayer.new(); voice.process_mode = Node.PROCESS_MODE_ALWAYS; add_child(voice)
+	if voice == null: voice = AudioStreamPlayer.new(); voice.process_mode = Node.PROCESS_MODE_ALWAYS; voice.volume_db = 2.0; add_child(voice)
+	# a routine bark never cuts off a line already playing; the important ones always get through
+	if voice.playing and not (line in URGENT): return
 	said[line] = now; voice.stream = load(path); voice.play()
+
+# average brightness of a texture, 0 to 1 (cached)
+var _bright := {}
+func ground_brightness(t: Texture2D) -> float:
+	if _bright.has(t): return _bright[t]
+	var img := t.get_image()
+	if img.is_compressed(): img.decompress()
+	img.resize(32, 32); var s := 0.0
+	for y in 32:
+		for x in 32: s += img.get_pixel(x, y).get_luminance()
+	_bright[t] = s / 1024.0; return _bright[t]
 
 func mission_key() -> String: return "world_%d" % current_world if current_world >= 0 else "city_7"
 func mission_seed() -> int: return 1000 + current_world * 97 if current_world >= 0 else 7
+
+# a short window after a menu closes in which the game ignores button presses
+var _block_until := 0.0
+func block_input(secs: float) -> void: _block_until = Time.get_ticks_msec() / 1000.0 + secs
+func input_blocked() -> bool: return Time.get_ticks_msec() / 1000.0 < _block_until
+
+# a dark outline on HUD text so it reads over bright ground
+func readable(l: Label) -> void:
+	l.add_theme_constant_override("outline_size", 6); l.add_theme_color_override("font_outline_color", Color(0, 0, 0, .9))
+
+func _exit_tree() -> void:
+	if kit: kit.free(); kit = null
 
 func _action(a: String) -> void:
 	if not InputMap.has_action(a): InputMap.add_action(a, .25)

@@ -5,6 +5,8 @@
 extends Node
 
 var wid := -1
+var rival := ""                 # the faction competing for this world's people; never your own
+var menu                        # the pause menu, used during events (forfeit)
 var w: Dictionary
 var ui: CanvasLayer; var box: VBoxContainer; var lbl_head: RichTextLabel; var bar_me: ProgressBar; var bar_foe: ProgressBar
 var lbl_result: Label; var cards: VBoxContainer
@@ -19,6 +21,8 @@ func _ready() -> void:
 			if x.owner == "neutral": wid = x.id; break
 		Game.current_world = wid
 	w = Game.galaxy.worlds[wid]
+	rival = Game.galaxy.raider_of(wid, Game.player_faction)
+	menu = preload("res://scripts/pause_menu.gd").new("event"); menu.on_forfeit = _forfeit; menu.active = false; add_child(menu)
 	_ui(); _refresh("")
 	if Game.test_mode:
 		Engine.time_scale = 3.0
@@ -34,7 +38,7 @@ func _ui() -> void:
 	panel.custom_minimum_size = Vector2(900, 0); panel.position = Vector2(-450, -390); ui.add_child(panel)
 	box = VBoxContainer.new(); box.add_theme_constant_override("separation", 12); panel.add_child(box)
 	lbl_head = RichTextLabel.new(); lbl_head.bbcode_enabled = true; lbl_head.fit_content = true; box.add_child(lbl_head)
-	for pair in [["You", Galaxy.FAC[Game.player_faction].color], [Galaxy.FAC[w.foe].name, Galaxy.FAC[w.foe].color]]:
+	for pair in [["You", Galaxy.FAC[Game.player_faction].color], [Galaxy.FAC[rival].name, Galaxy.FAC[rival].color]]:
 		var row := HBoxContainer.new(); box.add_child(row)
 		var l := Label.new(); l.text = pair[0]; l.custom_minimum_size = Vector2(220, 0); row.add_child(l)
 		var b := ProgressBar.new(); b.max_value = 100; b.custom_minimum_size = Vector2(600, 22); b.show_percentage = true; row.add_child(b)
@@ -49,7 +53,7 @@ func _refresh(result: String) -> void:
 	var boost := ""
 	if w.boost != "": boost = "\nWhoever wins it over gets its [b]%s[/b]: %s" % [Galaxy.BOOSTERS[w.boost].name, Galaxy.BOOSTERS[w.boost].desc]
 	lbl_head.text = "[font_size=30][b]%s[/b][/font_size]   %s, unclaimed\nThe %s are working the crowds here. Win the population over in open competition.%s" % [
-		w.name, Galaxy.BIOMES[w.biome].name, Galaxy.FAC[w.foe].name, boost]
+		w.name, Galaxy.BIOMES[w.biome].name, Galaxy.FAC[rival].name, boost]
 	bar_me.value = h.me; bar_foe.value = h.foe
 	lbl_result.text = result
 	for c in cards.get_children(): c.queue_free()
@@ -67,16 +71,16 @@ func _refresh(result: String) -> void:
 func play(key: String) -> void:
 	ui.visible = false
 	game = load(Game.EVENTS[key].script).new()
-	game.setup(w.foe, w.biome, w.name)
+	game.setup(rival, w.biome, w.name, w.res)
 	game.finished.connect(func(won, summary): _done(key, won, summary))
-	add_child(game)
+	add_child(game); menu.active = true
 	if Game.test_mode: get_tree().create_timer(5.0).timeout.connect(_snap.bind(key))
 
 func _snap(key: String) -> void:
 	if is_instance_valid(game): get_viewport().get_texture().get_image().save_png("user://t_ev_%s.png" % key)
 
 func _done(key: String, won: bool, summary: String) -> void:
-	game.queue_free(); game = null; ui.visible = true
+	game.queue_free(); game = null; ui.visible = true; menu.active = false; Game.block_input(.3)
 	var flip := Game.apply_event(wid, won)
 	if flip == "": Game.say("event_win" if won else "event_loss")
 	else: Game.say("world_joins" if w.owner == Game.player_faction else "world_lost")
@@ -89,13 +93,15 @@ func _done(key: String, won: bool, summary: String) -> void:
 		print("EVENT ", key, " won=", won, " | ", summary, " | hearts ", h.me, "/", h.foe, " owner ", w.owner)
 		get_tree().create_timer(.6).timeout.connect(_test_next)
 
-# ---- the controller: Cross picks a card (buttons take focus), Circle goes back to the map ----
+# Options or Esc during an event opens the pause menu, which can forfeit it
+func _forfeit() -> void:
+	if game and not game.done: game.finish(false, "Forfeited.")
+
+# ---- in the hall: Cross picks a card (buttons take focus), Circle goes back to the map ----
 func _unhandled_input(ev: InputEvent) -> void:
 	if game: return
-	if ev.is_action_pressed("roll") and Game.using_pad:
-		var f := get_viewport().gui_get_focus_owner()
-		if f is Button: (f as Button).pressed.emit()
-	elif ev.is_action_pressed("ui_cancel") or ev.is_action_pressed("crouch"):
+	# Cross presses the focused card through ui_accept; Circle or Esc goes back to the map
+	if ev.is_action_pressed("ui_cancel") or ev.is_action_pressed("crouch"):
 		get_tree().change_scene_to_file("res://scenes/galaxy.tscn")
 
 # ---- test mode: every event, played by the autopilot at three times speed ----

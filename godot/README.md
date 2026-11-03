@@ -49,7 +49,7 @@ On keyboard and mouse:
 
 The game opens on the galactic war map. The galaxy is a spiral disc of 177 worlds:
 
-- Each of the four factions holds its own arm. The Free Reach has 39 worlds, the Sovereign Concord 40, the Meridian Compact 37 and the Hollow Swarm 36.
+- Each of the four factions holds its own arm, which winds about 135 degrees from the core to the rim. The Free Reach has 38 worlds, the Sovereign Concord 41, the Meridian Compact 35 and the Hollow Swarm 38.
 - A neutral deep core and thin borderlands between the arms hold 25 unclaimed worlds, most of them carrying a booster.
 - Every arm is split into four sectors. Hold every world in a sector and its power-up applies to your whole squad.
 - Worlds have a biome, a resistance level, cities with their own power-ups, and space lanes to their neighbours. Lanes between rival factions show in red as the front line.
@@ -64,14 +64,14 @@ Unclaimed worlds aren't taken by force. Their people side with whoever wins them
 
 | Event | What it is |
 | --- | --- |
-| Skimmer Rally | Three laps of a canyon circuit in hover skimmers. Finish in the top two and ahead of the rival's ace. |
+| Skimmer Rally | A point-to-point rally stage across open country in hover skimmers. Finish in the top two and ahead of the rival's ace, inside 100 seconds. |
 | Asteroid Rush | A minute in a drifting ore field above the world. Cut rocks apart and haul more ore than the rival miner. |
-| Gravball | Two against two in a low-gravity arena. Outscore the rival pair. |
+| Gravball | Two against two in a low-gravity arena. Outscore the rival pair in 90 seconds; first to five ends it early. A draw goes to a golden goal, and if nobody scores in the next 60 seconds you lose. |
 | Ring Run | Full throttle through a canyon of beacon rings. Beat the rival pilot's time; their ghost flies beside you. |
 | Marksman Gala | A shooting exhibition in the town square. Spare the civilian cut-outs and outscore the rival marksman. |
-| Cargo Sumo | Heavy tugs on a shrinking floating platform. Shove the rival's hauler off before you go over. |
+| Cargo Sumo | Heavy tugs on a shrinking floating platform. Shove the rival's hauler off before you go over. No ramming in the first three seconds; if both of you are still on after two minutes, you lose. |
 
-All six work with the controller or with keyboard and mouse.
+All six work with the controller or with keyboard and mouse, and run on Godot's fixed 60 Hz physics clock, so the result does not depend on your frame rate. The rival raiding a world is always the nearest faction other than yours. Options or Esc during an event opens a menu where you can forfeit it, which counts as a loss.
 
 ## Battle damage
 
@@ -79,7 +79,7 @@ Destroyed buildings fall into heaps of rubble and loose chunks, and those stay t
 
 Ruins and craters are saved for each map in `user://battlefields.json`. A city you come back to is still wrecked. To start the test run on a clean map, launch with `-- --sv-fresh`.
 
-Troopers on both sides get over obstacles in the same way:
+Troopers on both sides get over obstacles in the same way, either automatically when you keep pushing into the obstacle or straight away with Cross or Space:
 
 - Low obstacles, up to about 1 m, are vaulted.
 - Chest-high obstacles, up to about 2.1 m, are climbed with both hands on the ledge and the rifle slung.
@@ -92,6 +92,8 @@ Three automated checks are included. Each prints PASS or FAIL per check and save
 - `godot --path . res://scenes/galaxy.tscn -- --sv-test --sv-fresh` checks the galaxy. It confirms there are more than 100 worlds, that each faction's section is one connected piece, that one lane network reaches every world, and that names are unique. It also checks the capitals, boosters, sectors and the 24 demo worlds, and that the seed always builds the same galaxy. It then drops onto an unclaimed world and plays all six events with an autopilot at three times speed.
 - `godot --path . res://scenes/main.tscn -- --sv-test --sv-fresh` plays the city mission by itself. It checks controller input, crouching, a kill, a vault and a climb, craters, rubble, settling debris, cover and saving.
 - `godot --path . res://scenes/gallery.tscn -- --sv-test` renders a close-up line of troopers, one in each movement pose.
+- `godot --headless --fixed-fps 60 --path . res://probe/fps_probe.tscn -- --sv-test` plays every event once with the autopilot. Run it again with `--fixed-fps 30` or `144`; the results should be identical.
+- `godot --headless --fixed-fps 60 --path . res://probe/sumo_probe.tscn -- --sv-test` plays Cargo Sumo twelve times and prints wins and durations. Add `--idle` to see what happens to a player who never moves.
 
 ## Licence
 

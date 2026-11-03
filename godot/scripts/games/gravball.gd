@@ -1,10 +1,10 @@
 # Starfall Vanguard event: Gravball. Two against two in a walled low-gravity arena: you and a local player against the
-# rival faction's pair. Drive the pod into the ball to push it, or pulse it hard with Cross. Most goals in 90 seconds;
-# a draw goes to a golden goal.
+# rival faction's pair. Drive the pod into the ball to push it, or pulse it hard with Cross. Most goals in 90 seconds
+# (first to five ends it early); a draw goes to a golden goal, and if nobody scores in the next 60 seconds you lose.
 # MIT License. Copyright (c) 2026 Brian Guarino / Guarino Gaming Group (G3), a department of Guarino Industries LLC.
 extends MiniGame
 
-const AW := 30.0; const AH := 17.0; const GOAL := 5.5; const TIME := 90.0
+const AW := 30.0; const AH := 17.0; const GOAL := 6.5; const TIME := 90.0
 var pods: Array = []            # {node, pos, vel, team, player, cd, skill, home}
 var bpos := Vector3.ZERO; var bvel := Vector3.ZERO; var bnode: MeshInstance3D
 var goals := [0, 0]             # [yours, theirs]
@@ -64,7 +64,10 @@ func step(dt: float) -> void:
 		p.pos.x = clamp(p.pos.x, -AW + 1, AW - 1); p.pos.z = clamp(p.pos.z, -AH + 1, AH - 1)
 		var to_b: Vector3 = bpos - p.pos; var d := to_b.length()
 		if d < 2.1:                                      # pods shove the ball
-			bvel += to_b.normalized() * max(2.0, p.vel.dot(to_b.normalized()) * 1.3) ; bpos = p.pos + to_b.normalized() * 2.1
+			# the ball leaves at least as fast as the pod drives into it; nothing piles up frame after frame
+			var n := to_b.normalized(); var push: float = max(2.0, p.vel.dot(n) * 1.3); var vn := bvel.dot(n)
+			if vn < push: bvel += n * (push - vn)
+			bpos = p.pos + n * 2.1
 		if pulse and p.cd <= 0 and d < 4.0:
 			bvel += to_b.normalized() * 22.0; p.cd = 1.2
 			if p.player: Game.rumble(.3, .4, .12)
@@ -72,7 +75,10 @@ func step(dt: float) -> void:
 		for b in pods:
 			if a == b: continue
 			var d: Vector3 = a.pos - b.pos
-			if d.length() < 2.2 and d.length() > .01: a.pos += d.normalized() * (2.2 - d.length()) * .5; a.vel += d.normalized() * 3.0
+			if d.length() < 2.2 and d.length() > .01:
+				var n := d.normalized(); a.pos += n * (2.2 - d.length()) * .5
+				var rel: float = (a.vel - b.vel).dot(n)
+				if rel < 0: a.vel -= n * rel * .6                 # a bump, once, while they are closing
 	bvel *= pow(.55, dt); bpos += bvel * dt
 	if abs(bpos.z) > AH - .9: bvel.z = -bvel.z * .8; bpos.z = sign(bpos.z) * (AH - .9)
 	if abs(bpos.x) > AW - .9:

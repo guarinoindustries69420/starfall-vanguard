@@ -31,7 +31,10 @@ func chest() -> float: return lerp(1.25, .8, crouch)
 func climbing() -> bool: return climb_t >= 0.0
 
 func _crouch_step(dt: float) -> void:
-	crouch = move_toward(crouch, 1.0 if want_crouch and not climbing() else 0.0, dt * 6.0)
+	var target := 1.0 if want_crouch and not climbing() else 0.0
+	# never stand up into something overhead: stay down until there is headroom
+	if target < crouch and not climbing() and not _clear_at(global_position + Vector3(0, .05, 0), 1.75): target = crouch
+	crouch = move_toward(crouch, target, dt * 6.0)
 	capsule.height = lerp(1.8, 1.15, crouch); shape_node.position.y = capsule.height / 2.0
 
 # move with gravity; when pushing into something low enough, get over it
@@ -89,8 +92,24 @@ func probe_obstacle(d: Vector3) -> Dictionary:
 				var gh := _ray(far + Vector3(0, 1.5, 0), far - Vector3(0, CLIMB_MAX + 1.0, 0))
 				if not gh.is_empty() and stand.y - gh.position.y > .25 and _clear_at(gh.position, 1.6): dest = gh.position; break
 		if not _clear_at(dest, 1.6 if kind == "climb" else 1.0): continue
+		if not _path_clear(p, dest, top, kind): return {}
 		return {"kind": kind, "to": dest, "h": top, "ledge": Vector3(fp.x, top_hit.position.y, fp.z)}
 	return {}
+
+# the body has to pass through the space over the obstacle: room overhead to pull up, and nothing (a thin tall wall,
+# an overhang) between here and the landing spot at head and chest height
+func _path_clear(p: Vector3, dest: Vector3, top: float, kind: String) -> bool:
+	if not _ray(p + Vector3(0, 1.5, 0), p + Vector3(0, top + 1.95, 0)).is_empty(): return false
+	for h in ([top + .5, top + .9] if kind == "vault" else [top + .6, top + 1.6]):
+		var a := Vector3(p.x, p.y + h, p.z); var b := Vector3(dest.x, p.y + h, dest.z)
+		if not _ray(a, b).is_empty(): return false
+	return true
+
+# stop a vault or climb on the spot (death mid-climb): land on whichever end is nearer
+func abort_climb() -> void:
+	if not climbing(): return
+	global_position = climb_to if climb_t > .5 else climb_from
+	climb_t = -1.0; velocity = Vector3.ZERO
 
 func try_climb(d: Vector3, forced: bool) -> bool:
 	if climbing() or (not is_on_floor() and not forced): return false
@@ -100,7 +119,7 @@ func try_climb(d: Vector3, forced: bool) -> bool:
 	climb_from = global_position; climb_yaw = atan2(d.x, d.z); climb_t = 0.0; push_t = 0.0; climbs += 1
 	if mission and self == mission.player: Game.say("climb", 30.0)
 	climb_dur = .55 if climb_kind == "vault" else lerp(.8, 1.15, (climb_h - VAULT_MAX) / (CLIMB_MAX - VAULT_MAX))
-	shape_node.disabled = true; velocity = Vector3.ZERO; want_crouch = false
+	velocity = Vector3.ZERO; want_crouch = false       # the body keeps its collision, so it can still be hit mid-climb
 	return true
 
 func _climb_step(dt: float) -> void:
@@ -122,7 +141,7 @@ func _climb_step(dt: float) -> void:
 			p.y = climb_to.y + .05 * (1.0 - b)
 	global_position = p
 	if u >= 1.0:
-		climb_t = -1.0; global_position = climb_to + Vector3(0, .02, 0); shape_node.disabled = false
+		climb_t = -1.0; global_position = climb_to + Vector3(0, .02, 0)
 
 # what the rig needs to animate getting over things
 func climb_state() -> Dictionary:

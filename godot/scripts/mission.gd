@@ -22,6 +22,7 @@ var col_count := 0
 var ruins: Array = []                     # rubble heaps (StaticBody3D)
 var debris: Array = []                    # loose chunks (RigidBody3D), frozen in place once they settle
 var paint_slabs: Array = []               # road markings, removed where a crater opens
+var pending_ruins: Array = []             # columns saved as destroyed, laid out after the standing ones
 var rng := RandomNumberGenerator.new()
 var shake := 0.0
 var kills := 0
@@ -75,19 +76,19 @@ func _surface(col: Color, rough: float, scale: float, nscale := .6) -> StandardM
 
 # the ground is one deformable heightmap; its colour comes from the painted surface (dirt, asphalt, kerb, pavement)
 func _ground() -> void:
-	var m := StandardMaterial3D.new(); m.roughness = .92
 	var gr := Gradient.new(); gr.set_color(0, Color(.74, .74, .74)); gr.set_color(1, Color(1.0, 1.0, 1.0))
-	var alb := _noise_tex(.02, false); alb.color_ramp = gr; m.albedo_texture = alb
-	m.normal_enabled = true; m.normal_texture = _noise_tex(.04, true, 4, 3.0); m.normal_scale = .7
-	m.uv1_triplanar = true; m.uv1_world_triplanar = true; m.uv1_scale = Vector3.ONE * .12
+	var alb := _noise_tex(.02, false); alb.color_ramp = gr
+	var gt: Texture2D = null
 	terrain = Terrain.new(); add_child(terrain)
 	if Game.current_world >= 0:                      # bare earth takes the colour of this world's ground
-		var gc: Color = Galaxy.BIOMES[Game.galaxy.worlds[Game.current_world].biome].ground
-		terrain.surf_col[0] = gc
-		var gt := Game.ground_texture(Game.galaxy.worlds[Game.current_world].biome)
-		if gt:                                       # the photographed ground shows through bare earth at full strength
-			m.albedo_texture = gt; terrain.surf_col[0] = Color(1, 1, 1); m.uv1_scale = Vector3.ONE * .09
-	terrain.setup(SIZE + 40, m, L_WORLD)
+		var biome: String = Game.galaxy.worlds[Game.current_world].biome
+		terrain.surf_col[0] = Galaxy.BIOMES[biome].ground
+		gt = Game.ground_texture(biome)
+		if gt: terrain.surf_col[0] = Color(1, 1, 1)  # the photographed ground shows on bare earth only, not on the paving
+	# very bright ground (ice, beach) is toned down a little so it does not glare
+	var tint := 1.0
+	if gt: tint = clamp(.62 / max(.2, Game.ground_brightness(gt)), .7, 1.0)
+	terrain.setup(SIZE + 40, Terrain.make_material(alb, _noise_tex(.04, true, 4, 3.0), gt, tint), L_WORLD)
 	terrain.paint_rect(-SIZE / 2, -SIZE / 2, SIZE / 2, SIZE / 2, 3, .12)
 
 # ---------- city: avenues, side streets, alleys, breakable buildings ----------
@@ -127,6 +128,7 @@ func _city() -> void:
 	for id in Game.battlefield(map_key).ruins: saved[int(id)] = true
 	for cx in cuts:
 		for cz in cuts: _split(cx[0], cz[0], cx[1], cz[1], 0, wall_mats, saved)
+	for info in pending_ruins: _ruin(info, Vector3.ZERO, false)
 	_remove_paint_in_craters()
 
 func _paint(pos: Vector3, size: Vector3, mat: Material) -> void:
@@ -171,9 +173,9 @@ func _split(x0: float, z0: float, x1: float, z1: float, d: int, wall_mats: Array
 func player_spawn_near(p: Vector3) -> bool:
 	return p.distance_to(Vector3(-SIZE / 2 + 8, 0, -SIZE / 2 + 8)) < 14.0
 
-# a building is a grid of 3 m columns, each its own breakable body. Foundations run 1.5 m below ground so a crater
-# beside a standing column shows its footing instead of a gap.
-const FOOT := 1.5
+# a building is a grid of 3 m columns, each its own breakable body. Foundations run 4 m below ground, deeper than any
+# crater can dig (Terrain.MIN_H), so a crater beside a standing column shows its footing and never a gap under it.
+const FOOT := 4.0
 func _building(x0: float, z0: float, x1: float, z1: float, mats: Dictionary, saved: Dictionary) -> void:
 	var floors := rng.randi_range(1, 3); var height := floors * 3.2 + rng.randf_range(0, .6)
 	var nx: int = max(1, round((x1 - x0) / 3.0)); var nz: int = max(1, round((z1 - z0) / 3.0))
@@ -183,7 +185,7 @@ func _building(x0: float, z0: float, x1: float, z1: float, mats: Dictionary, sav
 			var id := col_count; col_count += 1
 			var cx := x0 + tw * (i + .5); var cz := z0 + td * (j + .5); var gy := .12
 			var info := {"hp": 260.0 * floors, "size": Vector3(tw, height, td), "mat": mats.rubble, "id": id, "floors": floors, "pos": Vector3(cx, gy, cz)}
-			if saved.has(id): _ruin(info, Vector3.ZERO, false); continue
+			if saved.has(id): pending_ruins.append(info); continue      # built once every standing column exists
 			var body := StaticBody3D.new(); body.collision_layer = L_WORLD; body.position = Vector3(cx, gy + (height - FOOT) / 2, cz)
 			var cs := CollisionShape3D.new(); var sh := BoxShape3D.new(); sh.size = Vector3(tw, height + FOOT, td); cs.shape = sh; body.add_child(cs)
 			var mi := MeshInstance3D.new(); var bm := BoxMesh.new(); bm.size = Vector3(tw + .02, height + FOOT, td + .02); mi.mesh = bm; mi.material_override = mats.wall; body.add_child(mi)
@@ -195,7 +197,7 @@ func _building(x0: float, z0: float, x1: float, z1: float, mats: Dictionary, sav
 func _ruin(c: Dictionary, from: Vector3, live: bool, chunks := true) -> StaticBody3D:
 	var p: Vector3 = c.pos; var size: Vector3 = c.size; var floors: int = c.floors
 	var r := RandomNumberGenerator.new(); r.seed = 1000 + int(c.id) * 7919
-	var gy := terrain.height_at(p.x, p.z)
+	var gy := _ground_min(p, size)                   # sit on the lowest ground under the footprint, so no crater leaves it hanging
 	var hgt: float = clamp(.45 * floors + .45 + r.randf_range(-.15, .2), .8, 1.75)
 	if c.has("height"): hgt = c.height
 	var mound := StaticBody3D.new(); mound.collision_layer = L_WORLD; mound.position = Vector3(p.x, gy, p.z); add_child(mound)
@@ -210,12 +212,12 @@ func _ruin(c: Dictionary, from: Vector3, live: bool, chunks := true) -> StaticBo
 		var mi := MeshInstance3D.new(); var bm := BoxMesh.new(); bm.size = s; mi.mesh = bm; mi.material_override = c.mat
 		mi.position = off; mi.rotation = rot; mound.add_child(mi)
 		y += lh * .82
-	mound.set_meta("ruin_id", c.id); ruins.append(mound)
+	mound.set_meta("ruin_id", c.id); mound.set_meta("size", size); ruins.append(mound)
 	if not chunks: return mound
 	var n: int = clamp(floors * 2 + 1, 3, 7)
 	for i in n:
 		var s := Vector3(r.randf_range(.6, 1.3), r.randf_range(.35, .8), r.randf_range(.6, 1.3))
-		var rb := RigidBody3D.new(); rb.collision_layer = L_WORLD; rb.collision_mask = L_WORLD
+		var rb := RigidBody3D.new(); rb.collision_layer = L_WORLD; rb.collision_mask = L_WORLD; rb.continuous_cd = true
 		var cs := CollisionShape3D.new(); var sh := BoxShape3D.new(); sh.size = s; cs.shape = sh; rb.add_child(cs)
 		var mi := MeshInstance3D.new(); var bm := BoxMesh.new(); bm.size = s; mi.mesh = bm; mi.material_override = c.mat; rb.add_child(mi)
 		rb.mass = s.x * s.y * s.z * 2.0
@@ -227,18 +229,49 @@ func _ruin(c: Dictionary, from: Vector3, live: bool, chunks := true) -> StaticBo
 			rb.angular_velocity = Vector3(r.randf_range(-4, 4), r.randf_range(-4, 4), r.randf_range(-4, 4))
 			_settle(rb)
 		else:                                        # the map was loaded with this column already down: chunks at rest
-			var a := r.randf() * TAU; var rr := r.randf_range(max(size.x, size.z) * .5 + .2, max(size.x, size.z) * .5 + 1.8)
-			var q := Vector3(p.x + cos(a) * rr, 0, p.z + sin(a) * rr); q.y = terrain.height_at(q.x, q.z) + s.y / 2 - .05
+			var q := Vector3.INF
+			for tries in 10:                         # a spot beside the heap that is not inside a standing building
+				var a := r.randf() * TAU; var rr := r.randf_range(max(size.x, size.z) * .5 + .2, max(size.x, size.z) * .5 + 1.8)
+				var cand := Vector3(p.x + cos(a) * rr, 0, p.z + sin(a) * rr)
+				if not _inside_column(cand, max(s.x, s.z) * .5): q = cand; break
+			if q == Vector3.INF: rb.free(); continue
+			q.y = terrain.height_at(q.x, q.z) + s.y / 2 - .05
 			rb.position = q; rb.rotation = Vector3(r.randf_range(-.15, .15), r.randf() * TAU, r.randf_range(-.15, .15)); rb.freeze = true
 			add_child(rb)
 		debris.append(rb)
 	return mound
 
-# a loose chunk freezes where it lands and stays there as an obstacle
+func _ground_min(p: Vector3, size: Vector3) -> float:
+	var lo := 1e9
+	for fx in [-.5, 0.0, .5]:
+		for fz in [-.5, 0.0, .5]: lo = min(lo, terrain.height_at(p.x + fx * size.x, p.z + fz * size.z))
+	return lo
+
+func _inside_column(q: Vector3, margin: float) -> bool:
+	for b in columns:
+		var c: Dictionary = columns[b]; var cp: Vector3 = c.pos; var cs: Vector3 = c.size
+		if abs(q.x - cp.x) < cs.x / 2 + margin and abs(q.z - cp.z) < cs.z / 2 + margin: return true
+	return false
+
+# A loose chunk freezes once it has come to rest and stays there as an obstacle. The check only runs while the game
+# runs (paused time does not count), each new throw starts a new check so an older one cannot freeze it in flight,
+# and a chunk still moving is checked again a moment later.
 func _settle(rb: RigidBody3D) -> void:
 	rb.freeze = false; rb.can_sleep = true
-	rb.sleeping_state_changed.connect(func(): if is_instance_valid(rb) and rb.sleeping: rb.set_deferred("freeze", true))
-	get_tree().create_timer(4.0).timeout.connect(func(): if is_instance_valid(rb): rb.freeze = true)
+	var gen: int = rb.get_meta("settle", 0) + 1; rb.set_meta("settle", gen)
+	if not rb.has_meta("hooked"):
+		rb.set_meta("hooked", true)
+		rb.sleeping_state_changed.connect(func(): if is_instance_valid(rb) and rb.sleeping and not rb.freeze: rb.set_deferred("freeze", true))
+	_settle_check(rb, gen, 3.0, 0)
+
+# at rest: freeze. Still creeping (a chunk rocking in a crater bowl) after several looks: freeze once it is slow.
+# Still moving fast after ten seconds of game time is not possible for a chunk on the ground, so it freezes then.
+func _settle_check(rb: RigidBody3D, gen: int, wait: float, tries: int) -> void:
+	get_tree().create_timer(wait, false, true).timeout.connect(func():
+		if not is_instance_valid(rb) or rb.freeze or rb.get_meta("settle", 0) != gen: return
+		var v := rb.linear_velocity.length()
+		if (v < .25 and rb.angular_velocity.length() < .5) or (tries >= 4 and v < 1.5) or tries >= 9: rb.freeze = true
+		else: _settle_check(rb, gen, .75, tries + 1))
 
 # ---------- player and enemies ----------
 func _spawn_player() -> void:
@@ -277,7 +310,7 @@ func fire_bolt(from: Vector3, dir: Vector3, speed: float, dmg: float, from_playe
 	mi.look_at(from + dir, up); mi.rotate_object_local(Vector3.RIGHT, PI / 2)
 	bolts.append({"node": mi, "vel": dir * speed, "life": 1.2, "dmg": dmg, "player": from_player, "heavy": heavy})
 	var fl := OmniLight3D.new(); fl.light_color = col; fl.light_energy = 2.0; fl.omni_range = 4.0; fl.position = from; add_child(fl)
-	get_tree().create_timer(.05).timeout.connect(fl.queue_free)
+	get_tree().create_timer(.05, false).timeout.connect(fl.queue_free)
 
 func throw_grenade(by: Unit, target: Vector3) -> void:
 	var g := RigidBody3D.new(); g.collision_layer = 0; g.collision_mask = L_WORLD; g.mass = .5
@@ -290,18 +323,18 @@ func throw_grenade(by: Unit, target: Vector3) -> void:
 	var flat := Vector2(to.x, to.z).length(); if flat > 26.0: to *= 26.0 / flat; flat = 26.0
 	var T: float = clamp(flat / 16.0, .45, 1.2)
 	g.linear_velocity = Vector3(to.x / T, (to.y + .5 * 19.6 * T * T) / T, to.z / T)
-	get_tree().create_timer(1.7).timeout.connect(func():
+	get_tree().create_timer(1.7, false).timeout.connect(func():
 		if is_instance_valid(g): explode(g.global_position, 5.0, 160.0, 2.2); g.queue_free())
 
 # artillery: a red marker goes down, then six shells land around it over a few seconds
 func call_barrage(center: Vector3) -> void:
 	center.y = terrain.height_at(center.x, center.z)
 	var beacon := OmniLight3D.new(); beacon.light_color = Color("ff3a2a"); beacon.light_energy = 3.0; beacon.omni_range = 6.0; beacon.position = center + Vector3(0, .6, 0); add_child(beacon)
-	get_tree().create_timer(6.5).timeout.connect(beacon.queue_free)
+	get_tree().create_timer(6.5, false).timeout.connect(beacon.queue_free)
 	for i in 6:
 		var a := rng.randf() * TAU; var rr := sqrt(rng.randf()) * 9.0
 		var p := center + Vector3(cos(a) * rr, 0, sin(a) * rr)
-		get_tree().create_timer(2.0 + i * .6).timeout.connect(func(): _shell(p))
+		get_tree().create_timer(2.0 + i * .6, false).timeout.connect(func(): _shell(p))
 
 func _shell(p: Vector3) -> void:
 	p.y = terrain.height_at(p.x, p.z)
@@ -335,7 +368,8 @@ func explode(pos: Vector3, radius: float, dmg: float, crater_r := 0.0) -> void:
 		terrain.crater(cp, crater_r); Game.record_crater(map_key, cp, crater_r)
 		_remove_paint_in_craters()
 		for m in ruins:                                  # a heap sinks with the ground under it
-			if is_instance_valid(m): (m as Node3D).position.y = min((m as Node3D).position.y, terrain.height_at((m as Node3D).position.x, (m as Node3D).position.z))
+			if is_instance_valid(m) and m.has_meta("size"):
+				var mn: Node3D = m; mn.position.y = min(mn.position.y, _ground_min(mn.position, m.get_meta("size")))
 	for rb in debris:                                    # loose chunks near the blast are thrown, then settle again
 		if not is_instance_valid(rb): continue
 		var away: Vector3 = (rb as Node3D).global_position - pos
@@ -371,9 +405,16 @@ func _particles(pos: Vector3, col: Color, n: int, speed: float, life: float, siz
 	m.albedo_texture = _puff(); p.material_override = m
 	var g := Gradient.new(); g.set_color(0, Color(col, .9)); g.set_color(1, Color(col, 0)); p.color_ramp = g
 	add_child(p); p.emitting = true
-	get_tree().create_timer(life + .2).timeout.connect(p.queue_free)
+	get_tree().create_timer(life + .2, false).timeout.connect(p.queue_free)
 
 func _physics_process(dt: float) -> void:
+	# safety net: a chunk that tunnels through the ground (a fast throw, or a crater opening under it) is put back on top
+	for rb in debris:
+		if is_instance_valid(rb) and not rb.freeze:
+			var p: Vector3 = rb.global_position; var gh := terrain.height_at(p.x, p.z)
+			if p.y < gh - 2.0:
+				rb.global_position = Vector3(p.x, gh + 1.0, p.z); rb.linear_velocity = Vector3.ZERO; rb.angular_velocity = Vector3.ZERO
+				test["rescued"] = test.get("rescued", 0) + 1
 	var space := get_world_3d().direct_space_state
 	for b in bolts.duplicate():
 		var n: MeshInstance3D = b.node; var from := n.position; var to: Vector3 = from + b.vel * dt
@@ -416,9 +457,16 @@ func _hud() -> void:
 	hud_msg = Label.new(); hud_msg.text = "Starfall Vanguard · city mission"
 	if Game.current_world >= 0:
 		var w: Dictionary = Game.galaxy.worlds[Game.current_world]
-		hud_msg.text = "%s · %s · fighting the %s" % [w.name, Galaxy.BIOMES[w.biome].name, Galaxy.FAC[Game.enemy_faction].name]; hud_msg.position = Vector2(24, 76); hud_msg.modulate = Color(1, 1, 1, .6); hud.add_child(hud_msg)
+		hud_msg.text = "%s · %s · fighting the %s" % [w.name, Galaxy.BIOMES[w.biome].name, Galaxy.FAC[Game.enemy_faction].name]
+	hud_msg.position = Vector2(24, 76); hud_msg.modulate = Color(1, 1, 1, .8); hud.add_child(hud_msg)
 	hud_hint = Label.new(); hud_hint.anchor_top = 1.0; hud_hint.anchor_bottom = 1.0; hud_hint.position = Vector2(24, -40); hud_hint.offset_top = -40
-	hud_hint.add_theme_font_size_override("font_size", 16); hud_hint.modulate = Color(1, 1, 1, .75); hud.add_child(hud_hint)
+	hud_hint.add_theme_font_size_override("font_size", 16); hud_hint.modulate = Color(1, 1, 1, .9); hud.add_child(hud_hint)
+	# readable over any ground, even bright ice: a dark backing strip and an outline on every line of text
+	for pair in [[Vector2(12, 16), Vector2(720, 86), false], [Vector2(12, -50), Vector2(1100, 40), true]]:
+		var back := ColorRect.new(); back.color = Color(0, 0, 0, .45); back.position = pair[0]; back.size = pair[1]
+		if pair[2]: back.anchor_top = 1.0; back.anchor_bottom = 1.0; back.offset_top = -50; back.offset_bottom = -10
+		back.mouse_filter = Control.MOUSE_FILTER_IGNORE; hud.add_child(back); hud.move_child(back, 0)
+	for l in [hud_label, hud_msg, hud_hint]: Game.readable(l)
 
 # ---------- test mode: drive everything, check it, save screenshots, quit ----------
 func _shot(name: String) -> void:
@@ -525,7 +573,11 @@ func _test(dt: float) -> void:
 	if _at(19.5, dt):
 		var frozen := 0
 		for rb in debris: if is_instance_valid(rb) and rb.freeze: frozen += 1
-		_check("loose chunks settle and stay", frozen >= debris.size() - 2 and debris.size() > 0, "%d of %d frozen" % [frozen, debris.size()])
+		var below := 0
+		for rb in debris:
+			if is_instance_valid(rb) and (rb as Node3D).global_position.y < terrain.height_at(rb.global_position.x, rb.global_position.z) - 2.0: below += 1
+		_check("loose chunks settle and stay on the ground", frozen >= debris.size() - 2 and debris.size() > 0 and below == 0,
+			"%d of %d frozen, %d below ground, %d put back after falling through" % [frozen, debris.size(), below, test.get("rescued", 0)])
 		var q := PhysicsRayQueryParameters3D.create(Vector3(0, 0, 0), Vector3(0, 0, 0))
 		var blocked := 0
 		for m in ruins:

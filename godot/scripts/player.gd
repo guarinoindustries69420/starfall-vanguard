@@ -65,11 +65,12 @@ func _physics_process(dt: float) -> void:
 	var iv := _input_vec(); var mv := Vector3(iv.x, 0, iv.y)
 	aim_point = _aim_point(); var ad := aim_point - global_position; ad.y = 0
 	if ad.length() > .2 and (not Game.using_pad or Game.test_mode): aim_dir = ad.normalized()
-	if Input.is_action_just_pressed("crouch"): want_crouch = not want_crouch
+	var blk := Game.input_blocked()               # just after a menu closes, its button press is not a game command
+	if Input.is_action_just_pressed("crouch") and not blk: want_crouch = not want_crouch
 	_crouch_step(dt)
 	dodge_cd = max(0.0, dodge_cd - dt); barrage_cd = max(0.0, barrage_cd - dt)
 	# Cross / Space: vault or climb what is ahead, otherwise dive
-	if Input.is_action_just_pressed("roll") and not climbing() and dodge_t <= 0:
+	if Input.is_action_just_pressed("roll") and not blk and not climbing() and dodge_t <= 0:
 		var dir := mv.normalized() if mv.length() > .1 else aim_dir
 		if not try_climb(dir, false) and dodge_cd <= 0 and mv.length() > .1:
 			dodge_t = .35; dodge_cd = .9; dodge_dir = mv.normalized(); want_crouch = false
@@ -88,16 +89,16 @@ func _physics_process(dt: float) -> void:
 	elif (Input.is_action_just_pressed("reload") and ammo < mag) or ammo <= 0:
 		reload_t = RELOAD; Game.say("reload", 25.0)
 	fired = false
-	var want := (test_fire if Game.test_mode else false) or Input.is_action_pressed("fire")
+	var want := (test_fire if Game.test_mode else false) or (Input.is_action_pressed("fire") and not blk)
 	if want and fire_t <= 0 and reload_t <= 0 and ammo > 0 and dodge_t <= 0 and not climbing() and not sprint:
 		fire_t = .11; ammo -= 1; fired = true
 		var muzzle := global_position + Vector3(0, chest() + .2, 0) + aim_dir * .9 + aim_dir.cross(Vector3.UP) * -.23
 		var spread := (randf() - .5) * (.025 if steady else .06)
 		mission.fire_bolt(muzzle, _shot_dir(muzzle).rotated(Vector3.UP, spread), 60.0, 20.0, true, Color("ffd27a"))
 		Game.rumble(.25, 0.0, .05)
-	if Input.is_action_just_pressed("grenade") and grenades > 0 and not climbing():
+	if Input.is_action_just_pressed("grenade") and not blk and grenades > 0 and not climbing():
 		grenades -= 1; mission.throw_grenade(self, aim_point); Game.say("grenade", 20.0)
-	if Input.is_action_just_pressed("barrage") and barrage_cd <= 0 and not climbing():
+	if Input.is_action_just_pressed("barrage") and not blk and barrage_cd <= 0 and not climbing():
 		barrage_cd = BARRAGE_CD; mission.call_barrage(Vector3(aim_point.x, 0, aim_point.z)); Game.say("barrage")
 	var moved := global_position - last_pos; last_pos = global_position
 	var st := {"aim": atan2(aim_dir.x, aim_dir.z), "moving": mv.length() > .1 and not climbing(), "speed": spd, "move_yaw": atan2(mv.x, mv.z),
@@ -112,4 +113,4 @@ func hurt(d: float) -> void:
 	hp -= d; Game.rumble(.4, .6, .15)
 	if was >= 35.0 and hp < 35.0 and hp > 0: Game.say("low_health", 30.0)
 	if hp <= 0: Game.say("mission_lost")
-	if hp <= 0: hp = 0; dead_t = 0.0
+	if hp <= 0: hp = 0; dead_t = 0.0; abort_climb()

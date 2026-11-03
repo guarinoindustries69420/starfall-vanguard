@@ -51,10 +51,11 @@ func _ready() -> void:
 	for i in 1400: stars.append([Vector2(r.randf_range(-1500, 1500), r.randf_range(-1100, 1100)), r.randf_range(.6, 1.8), r.randf_range(.25, .9)])
 	terr = ColorRect.new(); terr.position = Vector2(-1250, -1250); terr.size = Vector2(2500, 2500); add_child(terr)
 	var sm := ShaderMaterial.new(); var sh := Shader.new(); sh.code = TERRITORY_SHADER; sm.shader = sh; terr.material = sm
-	terr.show_behind_parent = true
+	terr.show_behind_parent = true; terr.mouse_filter = Control.MOUSE_FILTER_IGNORE     # the backdrop must not eat clicks
 	_push_territory()
 	cam = Camera2D.new(); cam.zoom = Vector2(.42, .42); add_child(cam); cam.make_current()
 	_ui()
+	add_child(preload("res://scripts/pause_menu.gd").new("map"))
 	sel = G.capitals.get(Game.player_faction, 0); cursor = G.worlds[sel].pos
 	_refresh()
 	Game.say("map_open", 600.0)
@@ -73,10 +74,10 @@ func _ui() -> void:
 	title = Label.new(); title.text = "GALACTIC WAR MAP"; title.position = Vector2(28, 20); title.add_theme_font_size_override("font_size", 26)
 	title.add_theme_color_override("font_color", Color("cfe8f5")); ui.add_child(title)
 	counts = RichTextLabel.new(); counts.bbcode_enabled = true; counts.fit_content = true; counts.position = Vector2(28, 60); counts.size = Vector2(420, 160)
-	counts.add_theme_stylebox_override("normal", glass); ui.add_child(counts)
+	counts.add_theme_stylebox_override("normal", glass); counts.mouse_filter = Control.MOUSE_FILTER_IGNORE; ui.add_child(counts)
 	info = RichTextLabel.new(); info.bbcode_enabled = true; info.fit_content = true; info.anchor_left = 1; info.anchor_right = 1
 	info.offset_left = -460; info.offset_right = -24; info.offset_top = 20; info.add_theme_stylebox_override("normal", glass)
-	info.add_theme_font_size_override("normal_font_size", 16); ui.add_child(info)
+	info.add_theme_font_size_override("normal_font_size", 16); info.mouse_filter = Control.MOUSE_FILTER_IGNORE; ui.add_child(info)
 	hint = Label.new(); hint.anchor_top = 1; hint.anchor_bottom = 1; hint.offset_top = -40; hint.offset_left = 28
 	hint.add_theme_font_size_override("font_size", 16); hint.modulate = Color(1, 1, 1, .8); ui.add_child(hint)
 
@@ -112,7 +113,7 @@ func _describe(i: int) -> String:
 	t += "\n"
 	if w.owner == "neutral":
 		var hm: Dictionary = Game.hearts(i)
-		t += "[b]Hearts and minds[/b]\nYou %d%%   ·   %s %d%%\nWin the population over with events. %s to see them.\n" % [hm.me, Galaxy.FAC[w.foe].name, hm.foe, Game.prompt("roll") if Game.using_pad else "Enter"]
+		t += "[b]Hearts and minds[/b]\nYou %d%%   ·   %s %d%%\nWin the population over with events. %s to see them.\n" % [hm.me, Galaxy.FAC[G.raider_of(i, Game.player_faction)].name, hm.foe, Game.prompt("roll") if Game.using_pad else "Enter"]
 	elif w.owner == Game.player_faction:
 		t += "Held by you. Drop in to defend it against the %s.\n" % Galaxy.FAC[G.foe_of(i, Game.player_faction)].name
 	else:

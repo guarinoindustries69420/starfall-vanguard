@@ -1,5 +1,5 @@
 # Starfall Vanguard event: Marksman Gala. A shooting exhibition in the town square. Drone targets pop up across three rows
-# for a moment each; gold ones score, far rows score double, and the painted civilian cut-outs cost you two points.
+# for a moment each; gold ones score, the back row scores double, and the painted civilian cut-outs cost you two points.
 # The rival faction's marksman shoots the same course. Most points in 45 seconds wins.
 # MIT License. Copyright (c) 2026 Brian Guarino / Guarino Gaming Group (G3), a department of Guarino Industries LLC.
 extends MiniGame

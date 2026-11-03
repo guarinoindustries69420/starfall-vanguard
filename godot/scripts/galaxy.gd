@@ -8,13 +8,13 @@ class_name Galaxy
 const RADIUS := 1000.0          # galaxy radius in map units
 const MIN_D := 112.0            # closest two worlds may sit
 const CORE_R := 240.0           # the neutral deep core
-const TWIST := .0011            # how far the arms wind (radians per unit of radius)
+const TWIST := .0024            # how far the arms wind (radians per unit of radius): about 135 degrees from core to rim
 const BORDER := 46.0            # half-width of the neutral borderlands between arms
 const ORDER := ["reach", "concord", "compact", "swarm"]
 
 const FAC := {
-	"reach": {"name": "Free Reach", "kind": "Rebel coalition", "color": Color("ef8f3a")},
-	"concord": {"name": "Sovereign Concord", "kind": "Empire", "color": Color("e14a40")},
+	"reach": {"name": "Free Reach", "kind": "Frontier coalition", "color": Color("ef8f3a")},
+	"concord": {"name": "Sovereign Concord", "kind": "Crown state", "color": Color("e14a40")},
 	"compact": {"name": "Meridian Compact", "kind": "Federation", "color": Color("4fa8e8")},
 	"swarm": {"name": "Hollow Swarm", "kind": "Machine hive", "color": Color("a8de5c")},
 	"neutral": {"name": "Unclaimed worlds", "kind": "Neutral", "color": Color("9aa3ad")},
@@ -271,11 +271,23 @@ func _cities() -> void:
 			var size: String = "mega" if w.cap and c == 0 else ["town", "city", "city"][rng.randi() % 3]
 			w.cities.append({"size": size, "pu": order[c % order.size()]})
 
-const SYL_A := ["Ka", "Vel", "Tor", "Ash", "Mar", "Ost", "Bre", "Hal", "Ser", "Ny", "Or", "Cael", "Dra", "Fen", "Gal", "Ith", "Jor", "Lum",
+const SYL_A := ["Ka", "Vel", "Tor", "Ash", "Mar", "Ost", "Brev", "Hal", "Ser", "Ny", "Or", "Cael", "Dra", "Fen", "Gal", "Ith", "Jor", "Lum",
 	"Mor", "Nev", "Pra", "Quel", "Ryn", "Sol", "Tal", "Ul", "Vor", "Xan", "Yr", "Zeph", "Bel", "Cor", "Eid", "Har", "Isk", "Kor", "Lyr", "Myr"]
 const SYL_B := ["ra", "on", "ix", "eth", "ar", "is", "os", "um", "en", "ia", "or", "un", "ae", "yx", "ith", "ane", "ost", "ira"]
 const SYL_C := ["", "", "", "", "n", "s", "th", "l", "r", "d", "x"]
 const SUFFIX := [" Prime", " Minor", " II", " IV", " VII", " Gate", " Deep", " Hollow", " Station", " Rest", " Shoal", " Spire", " Drift", " Crossing"]
+
+# names that read badly or that belong to someone else's setting are thrown away and drawn again
+const BORROWED := ["breen", "hoth", "endor", "naboo", "tatooine", "jakku", "kamino", "ryloth", "lothal", "mustafar", "bespin",
+	"coruscant", "dagobah", "geonosis", "kessel", "korriban", "malachor", "scarif", "jedha", "alderaan", "corellia", "vulcan", "romulus",
+	"kronos", "arrakis", "caladan", "reach", "sith", "jedi", "korra"]
+func _awkward(nm: String) -> bool:
+	var l := nm.to_lower()
+	for bad in ["thth", "hth", "xr", "xth", "xs", "xd", "xl", "xn", "yxx", "iai", "aea", "aa", "ii", "uu"]:
+		if bad in l: return true
+	for bad in BORROWED:
+		if l.begins_with(bad) or l == bad: return true
+	return false
 
 func _names() -> void:
 	var used := {}
@@ -291,7 +303,10 @@ func _names() -> void:
 		if w.name != "": continue
 		var nm := ""
 		while nm == "" or used.has(nm):
-			nm = SYL_A[rng.randi() % SYL_A.size()] + SYL_B[rng.randi() % SYL_B.size()] + SYL_C[rng.randi() % SYL_C.size()]
+			var b: String = SYL_B[rng.randi() % SYL_B.size()]
+			var c: String = SYL_C[rng.randi() % SYL_C.size()] if b.right(1) in "aeiou" else ""
+			nm = SYL_A[rng.randi() % SYL_A.size()] + b + c
+			if _awkward(nm): nm = ""; continue
 			if rng.randf() < .28: nm += SUFFIX[rng.randi() % SUFFIX.size()]
 		w.name = nm; used[nm] = true
 
@@ -307,11 +322,20 @@ func apply_owners(d: Dictionary) -> void:
 
 func count(f: String) -> int: return worlds.filter(func(w): return w.owner == f).size()
 
+# who is raiding an unclaimed world, competing with you for its people: the nearest faction capital that is not yours
+func raider_of(i: int, me: String) -> String:
+	var p: Vector2 = worlds[i].pos; var best := ""; var bd := 1e18
+	for f in ORDER:
+		if f == me: continue
+		var d: float = (worlds[capitals[f]].pos as Vector2).distance_to(p)
+		if d < bd: bd = d; best = f
+	return best
+
 # who you fight on a world: its owner, or the raiders on an unclaimed world
 func foe_of(i: int, me: String) -> String:
 	var w: Dictionary = worlds[i]
 	if w.owner != "neutral" and w.owner != me: return w.owner
-	if w.owner == "neutral": return w.foe if w.foe != me else ("swarm" if me != "swarm" else "concord")
+	if w.owner == "neutral": return raider_of(i, me)
 	# a world you already hold: whoever borders it
 	for n in neighbours(i):
 		if worlds[n].owner != me and worlds[n].owner != "neutral": return worlds[n].owner

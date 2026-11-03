@@ -38,7 +38,7 @@ func build() -> void:
 	for m in ghost.find_children("*", "MeshInstance3D", true, false):
 		var gm: StandardMaterial3D = (m as MeshInstance3D).material_override.duplicate(); gm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA; gm.albedo_color.a = .4; m.material_override = gm
 	# the rival's time: a clean run plus a little, tighter on harder worlds
-	rival_time = (N + 1) * GAP / SPEED + 1.4
+	rival_time = (N + 1) * GAP / SPEED + {"low": 2.2, "med": 1.6, "high": 1.1, "fort": .8}.get(res, 1.6)
 	_place()
 
 func _place() -> void:

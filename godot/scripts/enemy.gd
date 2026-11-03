@@ -73,4 +73,4 @@ func hurt(d: float) -> void:
 	if hp <= 0: return
 	hp -= d; state = "hunt"
 	if hp <= 0:
-		hp = 0; dead_t = 0.0; collision_layer = 0; mission.kills += 1
+		hp = 0; dead_t = 0.0; collision_layer = 0; mission.kills += 1; abort_climb()
