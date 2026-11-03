@@ -84,6 +84,9 @@ func _ground() -> void:
 	if Game.current_world >= 0:                      # bare earth takes the colour of this world's ground
 		var gc: Color = Galaxy.BIOMES[Game.galaxy.worlds[Game.current_world].biome].ground
 		terrain.surf_col[0] = gc
+		var gt := Game.ground_texture(Game.galaxy.worlds[Game.current_world].biome)
+		if gt:                                       # the photographed ground shows through bare earth at full strength
+			m.albedo_texture = gt; terrain.surf_col[0] = Color(1, 1, 1); m.uv1_scale = Vector3.ONE * .09
 	terrain.setup(SIZE + 40, m, L_WORLD)
 	terrain.paint_rect(-SIZE / 2, -SIZE / 2, SIZE / 2, SIZE / 2, 3, .12)
 

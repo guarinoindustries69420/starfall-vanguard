@@ -98,6 +98,7 @@ func try_climb(d: Vector3, forced: bool) -> bool:
 	if info.is_empty(): return false
 	climb_kind = info.kind; climb_to = info.to; climb_h = info.h; climb_ledge = info.ledge
 	climb_from = global_position; climb_yaw = atan2(d.x, d.z); climb_t = 0.0; push_t = 0.0; climbs += 1
+	if mission and self == mission.player: Game.say("climb", 30.0)
 	climb_dur = .55 if climb_kind == "vault" else lerp(.8, 1.15, (climb_h - VAULT_MAX) / (CLIMB_MAX - VAULT_MAX))
 	shape_node.disabled = true; velocity = Vector3.ZERO; want_crouch = false
 	return true

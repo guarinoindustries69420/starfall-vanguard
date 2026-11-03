@@ -57,6 +57,7 @@ func _ready() -> void:
 	_ui()
 	sel = G.capitals.get(Game.player_faction, 0); cursor = G.worlds[sel].pos
 	_refresh()
+	Game.say("map_open", 600.0)
 
 func _push_territory() -> void:
 	var pts := PackedVector2Array(); var cols := PackedColorArray()

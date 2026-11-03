@@ -78,6 +78,8 @@ func _snap(key: String) -> void:
 func _done(key: String, won: bool, summary: String) -> void:
 	game.queue_free(); game = null; ui.visible = true
 	var flip := Game.apply_event(wid, won)
+	if flip == "": Game.say("event_win" if won else "event_loss")
+	else: Game.say("world_joins" if w.owner == Game.player_faction else "world_lost")
 	var res := "%s: %s %s" % [Game.EVENTS[key].name, "won." if won else "lost.", summary]
 	if flip != "": res += "\n\n" + flip
 	_refresh(res)

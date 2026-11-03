@@ -59,6 +59,8 @@ func _ready() -> void:
 	_load()
 	if fresh: battlefields = {}; _save()
 	galaxy = Galaxy.new(); galaxy.generate(GALAXY_SEED)
+	for a in args:                                   # --sv-world=N: start the mission on world N (for tests)
+		if a.begins_with("--sv-world="): current_world = int(a.split("=")[1])
 	if not fresh and FileAccess.file_exists(CAMPAIGN_PATH):
 		var f := FileAccess.open(CAMPAIGN_PATH, FileAccess.READ)
 		var d = JSON.parse_string(f.get_as_text()) if f else null
@@ -72,7 +74,7 @@ func save_campaign() -> void:
 
 # drop onto a world: the mission there fights whoever holds or raids it, on that world's ground, with its own saved damage
 func deploy(i: int) -> void:
-	current_world = i; enemy_faction = galaxy.foe_of(i, player_faction)
+	current_world = i; enemy_faction = galaxy.foe_of(i, player_faction); say("drop_mission")
 	get_tree().change_scene_to_file("res://scenes/main.tscn")
 
 # ---- hearts and minds: unclaimed worlds are won with events, not by force ----
@@ -113,8 +115,24 @@ func apply_event(i: int, won: bool) -> String:
 	return flip
 
 func open_events(i: int) -> void:
-	current_world = i
+	current_world = i; say("drop_events")
 	get_tree().change_scene_to_file("res://scenes/events.tscn")
+
+# a photographic ground texture for a biome, when one has been made (assets/ground/<biome>.jpg), or null
+func ground_texture(biome: String) -> Texture2D:
+	var path := "res://assets/ground/%s.jpg" % biome
+	return load(path) if ResourceLoader.exists(path) else null
+
+# ---- NINE, the ship's advisor, on the comm channel ----
+var voice: AudioStreamPlayer
+var said := {}                  # line -> time it was last spoken, so routine barks do not repeat every few seconds
+func say(line: String, cooldown := 0.0) -> void:
+	var now := Time.get_ticks_msec() / 1000.0
+	if cooldown > 0 and now - said.get(line, -1e9) < cooldown: return
+	var path := "res://assets/voice/nine_%s.ogg" % line
+	if not ResourceLoader.exists(path): return
+	if voice == null: voice = AudioStreamPlayer.new(); voice.process_mode = Node.PROCESS_MODE_ALWAYS; add_child(voice)
+	said[line] = now; voice.stream = load(path); voice.play()
 
 func mission_key() -> String: return "world_%d" % current_world if current_world >= 0 else "city_7"
 func mission_seed() -> int: return 1000 + current_world * 97 if current_world >= 0 else 7

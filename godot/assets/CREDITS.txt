@@ -1,0 +1,8 @@
+Starfall Vanguard asset batch, 2 November 2026
+Guarino Gaming Group (G3), a department of Guarino Industries LLC
+
+Ground textures (ice, jungle, ash, toxic): generated with Z-Image Turbo (Hugging Face Space mcp-tools/Z-Image-Turbo), seeds 4101 to 4104, then made seamless and evenly lit with PIL.
+Trooper concept (trooper_concept_drakeguard.png): Z-Image Turbo, seed 4201. Original design.
+NINE voice lines (nine_*.ogg): Kokoro-82M (Apache 2.0) through kokoro-onnx, run locally. The voice is a 60/40 blend of the stock bf_emma and af_nova styles, passed through a comm-channel filter in ffmpeg. No real person's voice was cloned.
+
+Not done: the Chatterbox Space was not used, because its only built-in voice is a reference clip of a real performer. TRELLIS image-to-3D (trellis-community/TRELLIS) returned "Not Found" on every endpoint, so no 3D model was made.

@@ -73,7 +73,7 @@ func _process(dt: float) -> void:
 	if not running:
 		countdown -= dt
 		lbl_big.text = str(int(ceil(countdown))) if countdown > 0 else "GO"
-		if countdown <= 0: running = true
+		if countdown <= 0: running = true; Game.say("event_start")
 		step_idle(dt); lbl_score.text = score_text(); return
 	if t < .8: lbl_big.text = "GO"
 	elif lbl_big.text == "GO": lbl_big.text = ""
@@ -114,7 +114,10 @@ func ground(size: float, col: Color) -> void:
 	var mi := MeshInstance3D.new(); var pm := PlaneMesh.new(); pm.size = Vector2(size, size); mi.mesh = pm
 	var m := mat(col, 0.0, .95, 0.0)
 	var n := FastNoiseLite.new(); n.frequency = .02; var tex := NoiseTexture2D.new(); tex.noise = n; tex.seamless = true; tex.as_normal_map = true; tex.bump_strength = 3.0
-	m.normal_enabled = true; m.normal_texture = tex; m.uv1_scale = Vector3(size / 12.0, size / 12.0, 1); mi.material_override = m; add_child(mi)
+	m.normal_enabled = true; m.normal_texture = tex; m.uv1_scale = Vector3(size / 12.0, size / 12.0, 1)
+	var gt := Game.ground_texture(biome)
+	if gt: m.albedo_texture = gt; m.albedo_color = Color(1, 1, 1)
+	mi.material_override = m; add_child(mi)
 
 # a small hover craft in a faction's colours: hull, canopy, twin engine pods with glowing exhausts
 func craft(fac_color: Color, accent: Color) -> Node3D:

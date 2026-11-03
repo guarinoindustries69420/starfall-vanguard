@@ -86,7 +86,7 @@ func _physics_process(dt: float) -> void:
 		reload_t -= dt
 		if reload_t <= 0: ammo = mag
 	elif (Input.is_action_just_pressed("reload") and ammo < mag) or ammo <= 0:
-		reload_t = RELOAD
+		reload_t = RELOAD; Game.say("reload", 25.0)
 	fired = false
 	var want := (test_fire if Game.test_mode else false) or Input.is_action_pressed("fire")
 	if want and fire_t <= 0 and reload_t <= 0 and ammo > 0 and dodge_t <= 0 and not climbing() and not sprint:
@@ -96,9 +96,9 @@ func _physics_process(dt: float) -> void:
 		mission.fire_bolt(muzzle, _shot_dir(muzzle).rotated(Vector3.UP, spread), 60.0, 20.0, true, Color("ffd27a"))
 		Game.rumble(.25, 0.0, .05)
 	if Input.is_action_just_pressed("grenade") and grenades > 0 and not climbing():
-		grenades -= 1; mission.throw_grenade(self, aim_point)
+		grenades -= 1; mission.throw_grenade(self, aim_point); Game.say("grenade", 20.0)
 	if Input.is_action_just_pressed("barrage") and barrage_cd <= 0 and not climbing():
-		barrage_cd = BARRAGE_CD; mission.call_barrage(Vector3(aim_point.x, 0, aim_point.z))
+		barrage_cd = BARRAGE_CD; mission.call_barrage(Vector3(aim_point.x, 0, aim_point.z)); Game.say("barrage")
 	var moved := global_position - last_pos; last_pos = global_position
 	var st := {"aim": atan2(aim_dir.x, aim_dir.z), "moving": mv.length() > .1 and not climbing(), "speed": spd, "move_yaw": atan2(mv.x, mv.z),
 		"dodge": (1.0 - dodge_t / .35) if dodge_t > 0 else 0.0, "reload": (1.0 - reload_t / RELOAD) if reload_t > 0 else 0.0,
@@ -108,5 +108,8 @@ func _physics_process(dt: float) -> void:
 
 func hurt(d: float) -> void:
 	if hp <= 0 or dodge_t > 0: return
+	var was := hp
 	hp -= d; Game.rumble(.4, .6, .15)
+	if was >= 35.0 and hp < 35.0 and hp > 0: Game.say("low_health", 30.0)
+	if hp <= 0: Game.say("mission_lost")
 	if hp <= 0: hp = 0; dead_t = 0.0
