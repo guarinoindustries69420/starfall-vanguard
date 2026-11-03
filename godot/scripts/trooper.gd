@@ -45,15 +45,19 @@ func build(armor: String, helm: String, pal: Dictionary, with_cape: bool, weapon
 	_detail_textures()
 	var cls: String = ARMOR_CLASS.get(armor, "M")
 	mats = {
-		"base": _mat(pal.base, .42, .15), "trim": _mat(pal.trim, .5, .12), "acc": _mat(pal.acc, .4, .2),
+		"base": _mat(pal.base, .55, .15), "trim": _mat(pal.trim, .62, .12), "acc": _mat(pal.acc, .5, .2),
 		"under": _mat(Color("3b3f47"), .92, 0.0, "cloth"), "dark": _mat(Color("24262c"), .65, .1, "cloth"),
-		"metal": _mat(Color("9aa0aa"), .3, .9), "gold": _mat(Color("d2a03c"), .28, 1.0),
+		"metal": _mat(Color("9aa0aa"), .3, .9), "gold": _mat(Color("d8a640"), .34, .6),
 		"visor": _mat(Color("0a1220"), .06, .6, "visor"), "cape": _mat(pal.trim, .95, 0.0, "cloth"),
 		"glow": _mat(pal.acc, .5, 0.0, "glow"),
+		"leather": _mat(Color("5a3a26"), .72, 0.0, "cloth"), "cloth": _mat(Color("6a1a22"), .95, 0.0, "cloth"),
+		"eye": _mat(Color("ff3a2a"), .4, 0.0, "glow"),
 	}
+	mats.eye.emission_enabled = true; mats.eye.emission = Color("ff3a2a"); mats.eye.emission_energy_multiplier = 3.5
 	mats.visor.emission_enabled = true; mats.visor.emission = pal.acc * .12
 	mats.glow.emission_enabled = true; mats.glow.emission = pal.acc; mats.glow.emission_energy_multiplier = 3.0
 	mats.cape.cull_mode = BaseMaterial3D.CULL_DISABLED; mats.cape.vertex_color_use_as_albedo = false
+	if armor == "drakeguard": mats.cape.albedo_color = Color("5a1a22")   # a maroon cape to match the tabard
 	tilt = _node(self, Vector3.ZERO); body = _node(tilt, Vector3.ZERO); upper = _node(body, Vector3.ZERO)
 	lower = _node(tilt, Vector3.ZERO)
 	var pelvis := _node(lower, Vector3(0, .98, 0)); _part("pelvis", pelvis)
@@ -61,7 +65,9 @@ func build(armor: String, helm: String, pal: Dictionary, with_cape: bool, weapon
 	leg_l = _leg(-1, cls); leg_r = _leg(1, cls)
 	var torso := _node(upper, Vector3(0, 1.05, 0))
 	_part("torso", torso)
-	_part("torso__chest_" + cls, torso); _part("torso__belt", torso); _part("torso__pack", torso); _part("torso__pauld_" + cls, torso)
+	_part("torso__chest_" + cls, torso); _part("torso__belt", torso); _part("torso__pauld_" + cls, torso)
+	_part("torso__pack_D" if cls == "D" else "torso__pack", torso)
+	if cls == "D": _part("torso__belt_D", torso)
 	if armor == "warden": _part("torso__tabard", torso)
 	arm_l = _arm(-1, cls); arm_r = _arm(1, cls)
 	head = _node(upper, Vector3(0, 1.82, .02)); _part("head__neck", head)
@@ -103,12 +109,13 @@ func _leg(side: int, cls: String) -> Node3D:
 	_part("thigh__pouch_L" if cls == "L" else "thigh__plate_" + cls, L, mr)
 	var K := _node(L, Vector3(0, -.44, 0)); _part("shin", K, mr); _part("shin__greave_" + cls, K, mr)
 	var B := _node(K, Vector3(0, -.42, 0)); _part("boot", B, mr)
+	if cls == "D": _part("boot__sabaton_D", B, mr)
 	L.set_meta("knee", K); L.set_meta("boot", B); return L
 
 func _arm(side: int, cls: String) -> Node3D:
 	var mr := side < 0
 	var R := _node(upper, Vector3(side * .31, 1.6, 0)); _part("upperarm", R, mr)
-	if cls != "L": _part("upperarm__plate_" + ("M" if cls == "D" else cls), R, mr)
+	if cls != "L": _part("upperarm__plate_" + cls, R, mr)
 	var F := _node(R, Vector3(0, -.3, 0)); _part("forearm", F, mr); _part("forearm__bracer_" + cls, F, mr)
 	var Hd := _node(F, Vector3(0, -.27, 0)); _part("hand", Hd, mr)
 	R.set_meta("fore", F); return R

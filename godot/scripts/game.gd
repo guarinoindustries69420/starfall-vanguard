@@ -10,7 +10,7 @@ const FACTIONS := {
 	"concord": {"name": "Sovereign Concord", "base": Color("e8e2d6"), "trim": Color("8e2a22"), "acc": Color("d4a640")},
 	"compact": {"name": "Meridian Compact", "base": Color("4fa8e8"), "trim": Color("123a5c"), "acc": Color("d4ebfb")},
 	"swarm": {"name": "Hollow Swarm", "base": Color("4a5a3a"), "trim": Color("1c2414"), "acc": Color("a8de5c")},
-	"wyrm": {"name": "Wyrm Lord", "base": Color("1d2740"), "trim": Color("0c0f17"), "acc": Color("d4a640")},
+	"wyrm": {"name": "Wyrm Lord", "base": Color("253148"), "trim": Color("161b28"), "acc": Color("d4a640")},
 }
 const GALAXY_SEED := 31
 const CAMPAIGN_PATH := "user://campaign.json"
