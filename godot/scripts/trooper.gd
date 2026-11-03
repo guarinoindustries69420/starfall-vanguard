@@ -11,12 +11,13 @@ const HOLD := {
 	"heavy": {"pos": Vector3(.2, 1.3, .2), "tw": .6, "rg": Vector3(0, -.08, -.03), "lg": Vector3(0, .09, .15), "hd": -.5, "rp": Vector3(.6, -1, -.4), "lp": Vector3(-.3, -1, .2)},
 	"tube": {"pos": Vector3(.24, 1.7, .12), "tw": .45, "rg": Vector3(0, -.07, -.03), "lg": Vector3(0, -.06, .25), "hd": -.38, "rp": Vector3(.4, -1, -.2), "lp": Vector3(-.3, -1, .1)},
 }
-const ARMOR_CLASS := {"vanguard": "M", "pathfinder": "L", "warden": "M", "ashwalker": "L", "bulwark": "H", "sentinel": "H", "drakeguard": "D"}
+const ARMOR_CLASS := {"vanguard": "M", "pathfinder": "L", "warden": "M", "ashwalker": "L", "bulwark": "H", "sentinel": "H", "drakeguard": "D", "drakeguard_hd": "D"}
 
 var tilt: Node3D; var body: Node3D; var upper: Node3D; var lower: Node3D
 var leg_l: Node3D; var leg_r: Node3D; var arm_l: Node3D; var arm_r: Node3D
 var head: Node3D; var gun: Node3D; var cape: Node3D; var cape_mesh: MeshInstance3D
 var mats := {}
+var hd: Node3D = null              # the fitted model's pieces, when this trooper wears one
 var hold: Dictionary; var gun0 := Vector3.ZERO
 var ph := 0.0; var recoil := 0.0; var t := 0.0
 var cloth: Array = []; var cloth_prev: Array = []
@@ -57,9 +58,17 @@ func build(armor: String, helm: String, pal: Dictionary, with_cape: bool, weapon
 	mats.visor.emission_enabled = true; mats.visor.emission = pal.acc * .12
 	mats.glow.emission_enabled = true; mats.glow.emission = pal.acc; mats.glow.emission_energy_multiplier = 3.0
 	mats.cape.cull_mode = BaseMaterial3D.CULL_DISABLED; mats.cape.vertex_color_use_as_albedo = false
-	if armor == "drakeguard": mats.cape.albedo_color = Color("5a1a22")   # a maroon cape to match the tabard
+	if armor.begins_with("drakeguard"): mats.cape.albedo_color = Color("5a1a22")   # a maroon cape to match the tabard
 	tilt = _node(self, Vector3.ZERO); body = _node(tilt, Vector3.ZERO); upper = _node(body, Vector3.ZERO)
 	lower = _node(tilt, Vector3.ZERO)
+	hd = Game.hd_kit(armor) if armor.ends_with("_hd") else null
+	if hd:                                   # a fitted model: one piece per joint replaces the whole built kit
+		_part("pelvis__hd", _node(lower, Vector3(0, .98, 0)))
+		leg_l = _leg(-1, cls); leg_r = _leg(1, cls)
+		_part("torso__hd", _node(upper, Vector3(0, 1.05, 0)))
+		arm_l = _arm(-1, cls); arm_r = _arm(1, cls)
+		head = _node(upper, Vector3(0, 1.82, .02)); _part("head__hd", head)
+		_gun(weapon, with_cape); return
 	var pelvis := _node(lower, Vector3(0, .98, 0)); _part("pelvis", pelvis)
 	if armor == "drakeguard": _part("pelvis__tabard_D", pelvis)
 	leg_l = _leg(-1, cls); leg_r = _leg(1, cls)
@@ -75,6 +84,9 @@ func build(armor: String, helm: String, pal: Dictionary, with_cape: bool, weapon
 	_part(hk.get(helm, "head__visor"), head)
 	if helm == "crest": _part("head__crest", head)
 	if helm == "antenna": _part("head__antenna", head)
+	_gun(weapon, with_cape)
+
+func _gun(weapon: String, with_cape: bool) -> void:
 	gun = _node(body, Vector3.ZERO)
 	var gk := "rifle"
 	if weapon in ["pistol", "handcannon", "mpistol", "spark", "ember"]: gk = "pistol"
@@ -90,7 +102,7 @@ func _node(parent: Node3D, pos: Vector3) -> Node3D:
 	var n := Node3D.new(); n.position = pos; parent.add_child(n); return n
 
 func _part(name: String, parent: Node3D, mirror := false) -> bool:
-	var p := Game.kit_part(name)
+	var p := Game.kit_part(name, hd if name.ends_with("__hd") else null)
 	if p == null: return false
 	if mirror: p.scale.x = -1
 	parent.add_child(p)
@@ -105,7 +117,12 @@ func _part(name: String, parent: Node3D, mirror := false) -> bool:
 
 func _leg(side: int, cls: String) -> Node3D:
 	var mr := side < 0
-	var L := _node(lower, Vector3(side * .13, .95, 0)); _part("thigh", L, mr)
+	var L := _node(lower, Vector3(side * .13, .95, 0))
+	if hd:
+		_part("thigh__hd", L, mr); var Kh := _node(L, Vector3(0, -.44, 0)); _part("shin__hd", Kh, mr)
+		var Bh := _node(Kh, Vector3(0, -.42, 0)); _part("boot__hd", Bh, mr)
+		L.set_meta("knee", Kh); L.set_meta("boot", Bh); return L
+	_part("thigh", L, mr)
 	_part("thigh__pouch_L" if cls == "L" else "thigh__plate_" + cls, L, mr)
 	var K := _node(L, Vector3(0, -.44, 0)); _part("shin", K, mr); _part("shin__greave_" + cls, K, mr)
 	var B := _node(K, Vector3(0, -.42, 0)); _part("boot", B, mr)
@@ -114,7 +131,11 @@ func _leg(side: int, cls: String) -> Node3D:
 
 func _arm(side: int, cls: String) -> Node3D:
 	var mr := side < 0
-	var R := _node(upper, Vector3(side * .31, 1.6, 0)); _part("upperarm", R, mr)
+	var R := _node(upper, Vector3(side * .31, 1.6, 0))
+	if hd:
+		_part("upperarm__hd", R, mr); var Fh := _node(R, Vector3(0, -.3, 0)); _part("forearm__hd", Fh, mr)
+		_part("hand__hd", _node(Fh, Vector3(0, -.27, 0)), mr); R.set_meta("fore", Fh); return R
+	_part("upperarm", R, mr)
 	if cls != "L": _part("upperarm__plate_" + cls, R, mr)
 	var F := _node(R, Vector3(0, -.3, 0)); _part("forearm", F, mr); _part("forearm__bracer_" + cls, F, mr)
 	var Hd := _node(F, Vector3(0, -.27, 0)); _part("hand", Hd, mr)

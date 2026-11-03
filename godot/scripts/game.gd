@@ -174,6 +174,9 @@ func readable(l: Label) -> void:
 
 func _exit_tree() -> void:
 	if kit: kit.free(); kit = null
+	for k in hd_kits:
+		if hd_kits[k]: hd_kits[k].free()
+	hd_kits.clear()
 
 func _action(a: String) -> void:
 	if not InputMap.has_action(a): InputMap.add_action(a, .25)
@@ -211,9 +214,18 @@ func rumble(weak: float, strong: float, secs: float) -> void:
 	for d in Input.get_connected_joypads(): Input.start_joy_vibration(d, clamp(weak, 0.0, 1.0), clamp(strong, 0.0, 1.0), secs)
 
 # A kit part is a node group in the GLB (for example "thigh" or "torso__chest_M"); returns a fresh copy or null.
-func kit_part(name: String) -> Node3D:
-	if kit == null: return null
-	var n := kit.find_child(name, true, false)
+var hd_kits := {}
+# a fitted one-piece model cut into rig pieces by blender/fit_model.py (assets/<armor>.glb), or null if there is none
+func hd_kit(armor: String) -> Node3D:
+	if not hd_kits.has(armor):
+		var path := "res://assets/%s.glb" % armor
+		hd_kits[armor] = (load(path) as PackedScene).instantiate() if ResourceLoader.exists(path) else null
+	return hd_kits[armor]
+
+func kit_part(name: String, from: Node3D = null) -> Node3D:
+	var src := from if from else kit
+	if src == null: return null
+	var n := src.find_child(name, true, false)
 	if n == null: return null
 	var c: Node3D = n.duplicate()
 	c.transform = Transform3D.IDENTITY

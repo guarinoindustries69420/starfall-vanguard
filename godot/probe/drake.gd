@@ -10,7 +10,8 @@ func _ready() -> void:
 	var rim := DirectionalLight3D.new(); rim.rotation_degrees = Vector3(-20, 160, 0); rim.light_energy = 1.0; add_child(rim)
 	var g := MeshInstance3D.new(); var pm := PlaneMesh.new(); pm.size = Vector2(10, 10); g.mesh = pm
 	var gm := StandardMaterial3D.new(); gm.albedo_color = Color("b4b7ba"); g.material_override = gm; add_child(g)
-	m = Trooper.new(); add_child(m); m.build("drakeguard", "dragon", Game.FACTIONS.wyrm, true, "rifle")
+	var armor := "drakeguard_hd" if "--hd" in OS.get_cmdline_user_args() else "drakeguard"
+	m = Trooper.new(); add_child(m); m.build(armor, "dragon", Game.FACTIONS.wyrm, true, "rifle")
 	cam = Camera3D.new(); cam.fov = 26; add_child(cam); _cam(0)
 func _cam(i: int) -> void:
 	var a: float = [1.0, PI + .5, .75][i]; var dist: float = [4.6, 4.6, 1.6][i]; var y: float = [1.0, 1.0, 1.6][i]
