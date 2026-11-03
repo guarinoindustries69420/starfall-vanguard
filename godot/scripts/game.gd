@@ -175,7 +175,8 @@ func readable(l: Label) -> void:
 func _exit_tree() -> void:
 	if kit: kit.free(); kit = null
 	for k in hd_kits:
-		if hd_kits[k]: hd_kits[k].free()
+		var n: Node = hd_kits[k]
+		if n: n.free()
 	hd_kits.clear()
 
 func _action(a: String) -> void:
