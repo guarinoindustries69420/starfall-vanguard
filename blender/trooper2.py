@@ -400,12 +400,20 @@ plate('cD_tab',(0,.77,.155),(.105,.24,.022),'cloth',g,sq=.25,rot=(.08,0,0),cuts=
 box('cD_tabHem',(0,.545,.178),(.2,.018,.012),'dark',g,bevel=.003)
 # thigh tassets with gold hems
 g='thigh__plate_D'
-tube('tD',(X,.93,.0),(X,.62,.0),.124,.1,'base',g,cuts=[((0,0,-.03),(0,0,-1))],thick=.022,caps=False,rings=3)
-ring('tD_g',(X,.63,0),.103,.103,.016,.007,'gold',g)
+tube('tD',(X,.93,.0),(X,.62,.0),.136,.112,'base',g,cuts=[((0,0,-.05),(0,0,-1))],thick=.024,caps=False,rings=3)
+ring('tD_g',(X,.63,0),.115,.115,.016,.007,'gold',g)
+for k in range(2):                           # two layered tassets over the front of the thigh, gold along the hem
+    tc=(X,.9-k*.1,.11-k*.01);tr=(.12-k*.01,.075,.05)
+    plate('tDt%d'%k,tc,tr,'base',g,sq=.55,rot=(.1,0,0),cuts=[((0,0,0),(0,0,-1)),((0,-.04,0),(0,-1,0))],thick=.018,seg=14,rings=10)
+    band('tDtg%d'%k,tc,tr,'gold',g,[((0,0,0),(0,0,-1)),((0,-.04,0),(0,-1,0)),((0,-.026,0),(0,1,0))],sq=.55,rot=(.1,0,0),thick=.008)
 # knee cops, greaves and sabatons
 g='shin__greave_D'
-tube('shD',(X,.47,0),(X,.13,.0),.092,.076,'base',g,cuts=[((0,0,-.035),(0,0,-1))],thick=.022,caps=False,rings=3)
-ring('shD_gt',(X,.46,0),.095,.095,.016,.007,'gold',g);ring('shD_gb',(X,.14,0),.08,.08,.016,.007,'gold',g)
+tube('shD',(X,.47,0),(X,.13,.0),.1,.084,'base',g,cuts=[((0,0,-.05),(0,0,-1))],thick=.024,caps=False,rings=3)
+ring('shD_gt',(X,.46,0),.103,.103,.016,.007,'gold',g);ring('shD_gb',(X,.14,0),.088,.088,.016,.007,'gold',g)
+sc,sr=(X,.31,.075),(.072,.13,.04)            # a raised shin guard down the front, gold-rimmed, with a roundel
+plate('shDf',sc,sr,'base',g,sq=.55,rot=(-.05,0,0),cuts=[((0,0,0),(0,0,-1))],thick=.016,seg=14,rings=12)
+band('shDfg',sc,sr,'gold',g,[((0,0,0),(0,0,-1)),((0,0,.016),(0,0,1))],sq=.55,rot=(-.05,0,0),thick=.007)
+bpy.context.view_layer.update();roundel('shDr','shDf',X,.31,0,g,r=.022)
 plate('kpD',(X,.515,.055),(.085,.095,.06),'base',g,sq=.62,rot=(-.12,0,0),cuts=[((0,0,0),(0,0,-1))],thick=.02,seg=16,rings=12)
 band('kpDg',(X,.515,.055),(.085,.095,.06),'gold',g,[((0,0,0),(0,0,-1)),((0,0,.022),(0,0,1))],sq=.62,rot=(-.12,0,0),thick=.008)
 bpy.context.view_layer.update();roundel('kpDr','kpD',X,.515,.0,g,r=.026)
