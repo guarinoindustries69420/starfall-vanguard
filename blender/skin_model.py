@@ -8,7 +8,9 @@
 #      anything inside the shoulder joint (the chest plate and its rim) stays off the upper arm, and cloth hanging on
 #      the midline in front of the legs (a tabard or loincloth) stays off the thighs and shins, so it follows the hips.
 #   4. Straighten the arms to the rig's rest pose through those same weights, so the shoulders bend instead of tearing.
-#   5. Export one skinned mesh on an armature whose bones sit on the rig's joints, named after them ("thigh_l", ...).
+#   5. Measure each fist (palm position and size against the built kit's) and print it as "SKIN fist" for trooper.gd's
+#      HD_BODY, which sizes and places the weapons from it.
+#   6. Export one skinned mesh on an armature whose bones sit on the rig's joints, named after them ("thigh_l", ...).
 # trooper.gd then drives each bone from the matching joint node every frame.
 # Run: python3 skin_model.py -- in.glb out.glb [--yaw DEG] [--arm DEG] [--height M] [--faces N]
 #   --yaw DEG  turns the model about the up axis, counter-clockwise seen from above, before fitting; a model that
@@ -118,6 +120,15 @@ def main():
             q = sh + np.stack([d[:, 0] * c - d[:, 1] * s_ * sd, d[:, 0] * s_ * sd + d[:, 1] * c, d[:, 2]], 1)
         else: q = P
         R += w[:, None] * q
+    # the hands, for trooper.gd's HD_BODY: the palm's centre from the wrist joint and the fist's size against the built
+    # kit's 12 cm fist, measured on the fist below the gauntlet cuff (more than 7.5 cm below the wrist), arms at rest
+    for k, (bn, j, sd) in enumerate(B):
+        if j != 'hand': continue
+        wr = np.array((J['hand'][0] * sd, J['hand'][1], J['hand'][2]))
+        Q = R[(W[:, k] > .5) & (R[:, 1] < wr[1] - .075)]
+        if len(Q) < 50: print('SKIN fist', bn, 'too few vertices to measure'); continue
+        lo, hi = np.percentile(Q, 3, 0), np.percentile(Q, 97, 0)
+        print('SKIN fist', bn, 'palm', np.round((lo + hi) / 2 - wr, 3), 'size', np.round((hi - lo) / .12, 2), 'mean', round(float(((hi - lo) / .12).mean()), 2))
     me.vertices.foreach_set('co', np.stack([R[:, 0], -R[:, 2], R[:, 1]], 1).ravel())
     me.update()
     # armature on the rig's joints, rest pose

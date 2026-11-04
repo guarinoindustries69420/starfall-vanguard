@@ -11,9 +11,10 @@ const HOLD := {
 	"heavy": {"pos": Vector3(.2, 1.3, .2), "tw": .6, "rg": Vector3(0, -.08, -.03), "lg": Vector3(0, .09, .15), "hd": -.5, "rp": Vector3(.6, -1, -.4), "lp": Vector3(-.3, -1, .2)},
 	"tube": {"pos": Vector3(.24, 1.7, .12), "tw": .45, "rg": Vector3(0, -.07, -.03), "lg": Vector3(0, -.06, .25), "hd": -.38, "rp": Vector3(.4, -1, -.2), "lp": Vector3(-.3, -1, .1)},
 }
-# the HD armour is bulkier than the built kit: its weapons sit further out so they clear the chest and arms
-const HD_GUN := {"rifle": Vector3(.1, .04, .26), "pistol": Vector3(.06, .02, .2), "heavy": Vector3(.06, .02, .2), "tube": Vector3(.06, .02, .2)}
-const HD_GUN_SCALE := 1.4          # and are scaled up to fit its gauntlets (picked from test renders of all four)
+# the skinned models' hands, measured from each model by blender/skin_model.py (its "SKIN fist" line): where the palm
+# sits from the wrist joint (right hand, metres, arm hanging at rest; the left mirrors it), and how big the fist is next
+# to the built kit's 12 cm fist. The arms reach the grips with that palm, and the weapons are scaled to that fist.
+const HD_BODY := {"drakeguard_hd": {"palm": Vector3(-.021, -.158, .041), "fist": 1.37, "sling": Vector3(0, 0, -.1)}}
 const ARMOR_CLASS := {"vanguard": "M", "pathfinder": "L", "warden": "M", "ashwalker": "L", "bulwark": "H", "sentinel": "H", "drakeguard": "D", "drakeguard_hd": "D"}
 
 var tilt: Node3D; var body: Node3D; var upper: Node3D; var lower: Node3D
@@ -24,8 +25,12 @@ var hd_src: Node3D = null          # the skinned model (blender/skin_model.py), 
 var hd_skel: Skeleton3D = null     # its skeleton, driven from the joint nodes every pose
 var hd_bones: Array = []           # per bone: [index, joint node, parent index, rest correction]
 var hold: Dictionary; var gun0 := Vector3.ZERO
-var gun_shift = null               # test overrides for HD_GUN and HD_GUN_SCALE (probe only)
+var gun_shift = null               # test overrides (probe only): extra weapon offset, and weapon scale in place of the fist's
 var gun_scale = null
+var hand_len := .31                # elbow to the point that closes on a grip: forearm .27 plus the fist, .04 on the built kit
+var hand_dir := Vector3.DOWN       # direction of that point from the elbow in the right forearm's frame (the left mirrors x)
+var fist := 1.0                    # fist size next to the built kit's; the weapons are scaled by it
+var sling := Vector3.ZERO          # extra offset for the weapon slung on the back, for armour deeper than the built kit's
 var ph := 0.0; var recoil := 0.0; var t := 0.0
 var cloth: Array = []; var cloth_prev: Array = []
 
@@ -72,6 +77,9 @@ func build(armor: String, helm: String, pal: Dictionary, with_cape: bool, weapon
 	if hd_src and not _hd_valid(hd_src):
 		push_warning("%s.glb: skeleton does not match the trooper rig; wearing the built kit" % armor); hd_src = null
 	if hd_src:                                 # a skinned model replaces the whole built kit; the joints drive its bones
+		var hb: Dictionary = HD_BODY.get(armor, {"palm": Vector3(0, -.04, 0), "fist": 1.0, "sling": Vector3.ZERO})
+		var hp: Vector3 = Vector3(0, -.27, 0) + (hb.palm as Vector3)
+		hand_len = hp.length(); hand_dir = hp / hand_len; fist = hb.fist; sling = hb.sling
 		var pelvis_h := _node(lower, Vector3(0, .98, 0))
 		leg_l = _leg(-1, cls); leg_r = _leg(1, cls)
 		var torso_h := _node(upper, Vector3(0, 1.05, 0))
@@ -109,9 +117,10 @@ func _gun(weapon: String, with_cape: bool) -> void:
 	elif weapon in ["launcher", "rr"]: gk = "tube"
 	_part("gun__" + gk, gun)
 	hold = HOLD[gk]; gun0 = hold.pos
-	if hd_src:
-		gun0 += (gun_shift if gun_shift != null else HD_GUN[gk])
-		gun.scale = Vector3.ONE * (gun_scale if gun_scale != null else HD_GUN_SCALE)
+	if hd_src or gun_scale != null:            # sized to the fist, growing about the trigger grip so it stays in the right palm
+		var s: float = gun_scale if gun_scale != null else fist
+		gun.scale = Vector3.ONE * s; gun0 += (hold.rg as Vector3) * (1.0 - s)
+	if gun_shift != null: gun0 += gun_shift
 	gun.position = gun0
 	upper.rotation.y = hold.tw; head.rotation.y = hold.hd; head.rotation.x = .12 if gk == "rifle" else .05
 	if with_cape: _build_cape()
@@ -209,16 +218,17 @@ func _arm(side: int, cls: String) -> Node3D:
 	var Hd := _node(F, Vector3(0, -.27, 0)); _part("hand", Hd, mr)
 	R.set_meta("fore", F); return R
 
-# ---- two-bone IK, in the twisted upper-body frame (upper arm .3, forearm plus fist .31) ----
+# ---- two-bone IK, in the twisted upper-body frame (upper arm .3, then forearm and fist out to the grip point) ----
 func _ik(R: Node3D, target: Vector3, pole: Vector3) -> void:
-	var a := .3; var b := .31; var S := R.position
+	var a := .3; var b := hand_len; var S := R.position
 	var d := target - S; var L: float = clamp(d.length(), .08, a + b - .001); d = d.normalized()
 	var A := acos(clamp((a * a + L * L - b * b) / (2 * a * L), -1.0, 1.0))
 	var pl := (pole - d * pole.dot(d)).normalized()
 	var up := (d * cos(A) + pl * sin(A)).normalized()
 	R.quaternion = Quaternion(Vector3.DOWN, up)
 	var elbow := S + up * a; var fd := (target - elbow).normalized()
-	var F: Node3D = R.get_meta("fore"); F.quaternion = Quaternion(Vector3.DOWN, R.quaternion.inverse() * fd)
+	var hdir := hand_dir if R == arm_r else hand_dir * Vector3(-1, 1, 1)
+	var F: Node3D = R.get_meta("fore"); F.quaternion = Quaternion(hdir, R.quaternion.inverse() * fd)
 
 # IK onto a point given in world space (hands on a ledge while climbing)
 func _ik_world(R: Node3D, wt: Vector3, wpole: Vector3) -> void:
@@ -311,7 +321,7 @@ func _climb_pose(u: float, st: Dictionary) -> bool:
 	var ledge: Vector3 = st.get("climb_ledge", global_position)
 	var fwd := global_transform.basis.z; var right := global_transform.basis.x   # the rig's +x side, where the right arm hangs
 	var slung := u > .06 and u < .9
-	if slung: gun.position = Vector3(0, 1.3, -.3); gun.rotation = Vector3(-1.25, 0, .55)   # across the back, muzzle up over the right shoulder
+	if slung: gun.position = Vector3(0, 1.3, -.3) + sling; gun.rotation = Vector3(-1.25, 0, .55)   # across the back, muzzle up over the right shoulder
 	else: gun.position = gun0; gun.rotation = Vector3.ZERO
 	var lean := sin(PI * u)
 	body.rotation.x = .45 * lean

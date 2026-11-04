@@ -1,7 +1,7 @@
 # Test probe (not part of the game): the Drakeguard in a standing pose under studio light, front three-quarter and back,
 # to compare with the concept image. MIT License. Copyright (c) 2026 Brian Guarino / Guarino Gaming Group (G3).
 extends Node3D
-var t := 0.0; var m: Trooper; var cam: Camera3D; var shot := 0
+var m: Trooper; var cam: Camera3D; var shot := 0
 func _ready() -> void:
 	var we := WorldEnvironment.new(); var env := Environment.new(); env.background_mode = Environment.BG_COLOR; env.background_color = Color("c9cbcd")
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR; env.ambient_light_color = Color("b8bcc2"); env.ambient_light_energy = .7
@@ -25,11 +25,28 @@ func _ready() -> void:
 func _cam(i: int) -> void:
 	var a: float = [1.0, PI + .5, .75][i]; var dist: float = [4.6, 4.6, 1.6][i]; var y: float = [1.0, 1.0, 1.6][i]
 	cam.position = Vector3(sin(a) * dist, y + .25, cos(a) * dist); cam.look_at(Vector3(0, y, 0))
-func _process(dt: float) -> void:
-	t += dt
+# shots are taken on fixed frames, not on the clock, so the same command gives the same pictures every run
+var f := 0
+func _process(_dt: float) -> void:
+	f += 1
 	var st := {"aim": 0.0, "world_move": Vector3.ZERO}
-	if "--crouchwalk" in OS.get_cmdline_user_args(): st.merge({"moving": true, "speed": 2.0, "move_yaw": 0.0, "crouch": 1.0}, true)
-	m.pose(1.0 / 60.0, st)
-	if t > 1.0 and shot == 0: get_viewport().get_texture().get_image().save_png("user://t_drake_front.png"); shot = 1; _cam(1)
-	elif t > 1.3 and shot == 1: get_viewport().get_texture().get_image().save_png("user://t_drake_back.png"); shot = 2; _cam(2)
-	elif t > 1.6 and shot == 2: get_viewport().get_texture().get_image().save_png("user://t_drake_close.png"); get_tree().quit()
+	var args := OS.get_cmdline_user_args()
+	if "--crouchwalk" in args: st.merge({"moving": true, "speed": 2.0, "move_yaw": 0.0, "crouch": 1.0}, true)
+	if "--reload" in args: st.merge({"reload": .5}, true)
+	if "--climb" in args: st.merge({"climb_kind": "climb", "climb_u": .4, "climb_ledge": Vector3(0, 1.6, .5)}, true)
+	if f <= 60: m.pose(1.0 / 60.0, st)
+	if f == 60: _grips()
+	if f == 63: get_viewport().get_texture().get_image().save_png("user://t_drake_front.png"); _cam(1)
+	elif f == 66: get_viewport().get_texture().get_image().save_png("user://t_drake_back.png"); _cam(2)
+	elif f == 69: get_viewport().get_texture().get_image().save_png("user://t_drake_close.png"); get_tree().quit()
+
+# how far each hand's grip point (the palm on the HD model) is from the weapon grip it should close on
+func _grips() -> void:
+	for side in ["r", "l"]:
+		var R: Node3D = m.arm_r if side == "r" else m.arm_l
+		var F: Node3D = R.get_meta("fore")
+		var d: Vector3 = m.hand_dir if side == "r" else m.hand_dir * Vector3(-1, 1, 1)
+		var palm: Vector3 = F.global_transform * (d * m.hand_len)
+		var tgt: Vector3 = m.gun.get_parent().global_transform * (m.gun.transform * (m.hold.rg if side == "r" else m.hold.lg))
+		print("GRIP %s palm to grip %.3f m" % [side, palm.distance_to(tgt)])
+	print("GUN scale %.2f at %s" % [m.gun.scale.x, m.gun.position])
