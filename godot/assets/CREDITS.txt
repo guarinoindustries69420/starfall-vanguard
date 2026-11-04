@@ -12,9 +12,12 @@ photo, or a blend of two different places at the wrap), then resized with wrapar
 Trooper concept (assets/concept/trooper_concept_drakeguard.png): Z-Image Turbo, seed 4201. Original design. A reference
 for later modelling. The first TRELLIS image-to-3D Space returned "Not Found" on every endpoint; see below.
 
-Drakeguard HD model (assets/drakeguard_hd.glb): for now a stand-in, the built Drakeguard kit merged into one A-posed
-statue by blender/test_statue.py (arm 20) and skinned onto the rig by blender/skin_model.py --arm 20 (same commit). It will be replaced
-by a TRELLIS.2-4B model (Microsoft, MIT License) made on the prithivMLmods/TRELLIS.2-Text-to-3D Space (Apache 2.0).
+Drakeguard HD model (assets/drakeguard_hd.glb): the A-pose concept made with Z-Image Turbo, its backpack removed with
+FLUX.1 Kontext [dev] (Black Forest Labs, mcp-tools/FLUX.1-Kontext-Dev Space, seed 11; the FLUX.1 [dev] Non-Commercial
+License lets its outputs be used for any purpose, including commercial, except training a competing model), then turned
+into a textured 3D model by TRELLIS.2-4B (Microsoft, MIT License) on the prithivMLmods/TRELLIS.2-Text-to-3D Space
+(Apache 2.0), seed 7, resolution 1024, 300000-face target, 2048 texture. Skinned onto the rig with
+blender/skin_model.py --arm 10 --faces 100000. blender/test_statue.py makes the known-answer stand-in used to test it.
 
 NINE voice lines (assets/voice/nine_*.ogg): Kokoro-82M (Apache 2.0) through kokoro-onnx, run locally. The voice is a
 60/40 blend of the stock bf_emma and af_nova styles, passed through a comm-channel filter in ffmpeg and levelled to

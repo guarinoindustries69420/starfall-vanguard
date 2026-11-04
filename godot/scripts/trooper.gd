@@ -11,6 +11,9 @@ const HOLD := {
 	"heavy": {"pos": Vector3(.2, 1.3, .2), "tw": .6, "rg": Vector3(0, -.08, -.03), "lg": Vector3(0, .09, .15), "hd": -.5, "rp": Vector3(.6, -1, -.4), "lp": Vector3(-.3, -1, .2)},
 	"tube": {"pos": Vector3(.24, 1.7, .12), "tw": .45, "rg": Vector3(0, -.07, -.03), "lg": Vector3(0, -.06, .25), "hd": -.38, "rp": Vector3(.4, -1, -.2), "lp": Vector3(-.3, -1, .1)},
 }
+# the HD armour is bulkier than the built kit: its weapons sit further out so they clear the chest and arms
+const HD_GUN := {"rifle": Vector3(.1, .04, .26), "pistol": Vector3(.06, .02, .2), "heavy": Vector3(.06, .02, .2), "tube": Vector3(.06, .02, .2)}
+const HD_GUN_SCALE := 1.4          # and are scaled up to fit its gauntlets (picked from test renders of all four)
 const ARMOR_CLASS := {"vanguard": "M", "pathfinder": "L", "warden": "M", "ashwalker": "L", "bulwark": "H", "sentinel": "H", "drakeguard": "D", "drakeguard_hd": "D"}
 
 var tilt: Node3D; var body: Node3D; var upper: Node3D; var lower: Node3D
@@ -21,6 +24,8 @@ var hd_src: Node3D = null          # the skinned model (blender/skin_model.py), 
 var hd_skel: Skeleton3D = null     # its skeleton, driven from the joint nodes every pose
 var hd_bones: Array = []           # per bone: [index, joint node, parent index, rest correction]
 var hold: Dictionary; var gun0 := Vector3.ZERO
+var gun_shift = null               # test overrides for HD_GUN and HD_GUN_SCALE (probe only)
+var gun_scale = null
 var ph := 0.0; var recoil := 0.0; var t := 0.0
 var cloth: Array = []; var cloth_prev: Array = []
 
@@ -103,7 +108,11 @@ func _gun(weapon: String, with_cape: bool) -> void:
 	elif weapon in ["hmg", "autocannon", "flamer", "beam"]: gk = "heavy"
 	elif weapon in ["launcher", "rr"]: gk = "tube"
 	_part("gun__" + gk, gun)
-	hold = HOLD[gk]; gun.position = hold.pos; gun0 = hold.pos
+	hold = HOLD[gk]; gun0 = hold.pos
+	if hd_src:
+		gun0 += (gun_shift if gun_shift != null else HD_GUN[gk])
+		gun.scale = Vector3.ONE * (gun_scale if gun_scale != null else HD_GUN_SCALE)
+	gun.position = gun0
 	upper.rotation.y = hold.tw; head.rotation.y = hold.hd; head.rotation.x = .12 if gk == "rifle" else .05
 	if with_cape: _build_cape()
 	_arms(0.0, 0.0)
@@ -145,7 +154,7 @@ func _hd_bind(joints: Dictionary) -> void:
 			var src := mm.mesh.surface_get_material(k) as BaseMaterial3D
 			if src == null: continue
 			if mats.has(src.resource_name): mm.set_surface_override_material(k, mats[src.resource_name]); continue
-			var c := src.duplicate() as BaseMaterial3D; c.metallic *= .5     # the generated maps read too glossy here
+			var c := src.duplicate() as BaseMaterial3D; c.metallic *= .25     # the generated maps read too glossy here
 			mm.set_surface_override_material(k, c)
 	_hd_drive()
 

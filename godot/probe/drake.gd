@@ -11,7 +11,16 @@ func _ready() -> void:
 	var g := MeshInstance3D.new(); var pm := PlaneMesh.new(); pm.size = Vector2(10, 10); g.mesh = pm
 	var gm := StandardMaterial3D.new(); gm.albedo_color = Color("b4b7ba"); g.material_override = gm; add_child(g)
 	var armor := "drakeguard_hd" if "--hd" in OS.get_cmdline_user_args() else "drakeguard"
-	m = Trooper.new(); add_child(m); m.build(armor, "dragon", Game.FACTIONS.wyrm, true, "rifle")
+	m = Trooper.new(); add_child(m)
+	for a in OS.get_cmdline_user_args():
+		if a.begins_with("--shift="):
+			var v := a.trim_prefix("--shift=").split_floats(",")
+			m.gun_shift = Vector3(v[0], v[1], v[2])
+		if a.begins_with("--gscale="): m.gun_scale = float(a.trim_prefix("--gscale="))
+	var weapon := "rifle"
+	for a in OS.get_cmdline_user_args():
+		if a.begins_with("--weapon="): weapon = a.trim_prefix("--weapon=")
+	m.build(armor, "dragon", Game.FACTIONS.wyrm, true, weapon)
 	cam = Camera3D.new(); cam.fov = 26; add_child(cam); _cam(0)
 func _cam(i: int) -> void:
 	var a: float = [1.0, PI + .5, .75][i]; var dist: float = [4.6, 4.6, 1.6][i]; var y: float = [1.0, 1.0, 1.6][i]
