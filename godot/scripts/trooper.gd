@@ -17,7 +17,9 @@ var tilt: Node3D; var body: Node3D; var upper: Node3D; var lower: Node3D
 var leg_l: Node3D; var leg_r: Node3D; var arm_l: Node3D; var arm_r: Node3D
 var head: Node3D; var gun: Node3D; var cape: Node3D; var cape_mesh: MeshInstance3D
 var mats := {}
-var hd_src: Node3D = null          # the fitted model's pieces, when this trooper wears one
+var hd_src: Node3D = null          # the skinned model (blender/skin_model.py), when this trooper wears one
+var hd_skel: Skeleton3D = null     # its skeleton, driven from the joint nodes every pose
+var hd_bones: Array = []           # per bone: [index, joint node, parent index, rest correction]
 var hold: Dictionary; var gun0 := Vector3.ZERO
 var ph := 0.0; var recoil := 0.0; var t := 0.0
 var cloth: Array = []; var cloth_prev: Array = []
@@ -62,12 +64,16 @@ func build(armor: String, helm: String, pal: Dictionary, with_cape: bool, weapon
 	tilt = _node(self, Vector3.ZERO); body = _node(tilt, Vector3.ZERO); upper = _node(body, Vector3.ZERO)
 	lower = _node(tilt, Vector3.ZERO)
 	hd_src = Game.hd_kit(armor) if armor.ends_with("_hd") else null
-	if hd_src:                                 # a fitted model: one piece per joint replaces the whole built kit
-		_part("pelvis__hd", _node(lower, Vector3(0, .98, 0)))
+	if hd_src:                                 # a skinned model replaces the whole built kit; the joints drive its bones
+		var pelvis_h := _node(lower, Vector3(0, .98, 0))
 		leg_l = _leg(-1, cls); leg_r = _leg(1, cls)
-		_part("torso__hd", _node(upper, Vector3(0, 1.05, 0)))
+		var torso_h := _node(upper, Vector3(0, 1.05, 0))
 		arm_l = _arm(-1, cls); arm_r = _arm(1, cls)
-		head = _node(upper, Vector3(0, 1.82, .02)); _part("head__hd", head)
+		head = _node(upper, Vector3(0, 1.82, .02))
+		_hd_bind({"pelvis": pelvis_h, "torso": torso_h, "head": head, "thigh_l": leg_l, "thigh_r": leg_r,
+			"shin_l": leg_l.get_meta("knee"), "shin_r": leg_r.get_meta("knee"), "boot_l": leg_l.get_meta("boot"),
+			"boot_r": leg_r.get_meta("boot"), "upperarm_l": arm_l, "upperarm_r": arm_r, "forearm_l": arm_l.get_meta("fore"),
+			"forearm_r": arm_r.get_meta("fore"), "hand_l": arm_l.get_meta("hand"), "hand_r": arm_r.get_meta("hand")})
 		_gun(weapon, with_cape); return
 	armor = armor.trim_suffix("_hd")         # no fitted model on disk: wear the built kit of the same armor
 	cls = ARMOR_CLASS.get(armor, "M")
@@ -100,11 +106,46 @@ func _gun(weapon: String, with_cape: bool) -> void:
 	if with_cape: _build_cape()
 	_arms(0.0, 0.0)
 
+# ---- the skinned model: each bone follows its joint node ----
+# a node's transform in this trooper's space (works before the trooper is in the scene tree)
+func _rel(n: Node3D) -> Transform3D:
+	var t := Transform3D.IDENTITY
+	while n != self: t = n.transform * t; n = n.get_parent()
+	return t
+
+# called with every joint still at rest; the bone's rest pose is turned into "follow this joint from now on"
+func _hd_bind(joints: Dictionary) -> void:
+	var m: Node3D = hd_src.duplicate(); add_child(m)
+	hd_skel = m.find_children("*", "Skeleton3D", true, false)[0]
+	var s0 := _rel(hd_skel)
+	for i in hd_skel.get_bone_count():
+		var j: Node3D = joints.get(hd_skel.get_bone_name(i))
+		if j == null: continue
+		hd_bones.append([i, j, hd_skel.get_bone_parent(i), _rel(j).affine_inverse() * s0 * hd_skel.get_bone_global_rest(i)])
+	for mi in m.find_children("*", "MeshInstance3D", true, false):
+		var mm: MeshInstance3D = mi; mm.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+		for k in mm.mesh.get_surface_count():
+			var src := mm.mesh.surface_get_material(k) as BaseMaterial3D
+			if src == null: continue
+			if mats.has(src.resource_name): mm.set_surface_override_material(k, mats[src.resource_name]); continue
+			var c := src.duplicate() as BaseMaterial3D; c.metallic *= .5     # the generated maps read too glossy here
+			mm.set_surface_override_material(k, c)
+	_hd_drive()
+
+func _hd_drive() -> void:
+	var inv := _rel(hd_skel).affine_inverse(); var glob := {}
+	for b in hd_bones:                         # bones come parent first in the imported skeleton
+		var g: Transform3D = inv * _rel(b[1]) * b[3]; glob[b[0]] = g
+		var l: Transform3D = (glob[b[2]] as Transform3D).affine_inverse() * g if glob.has(b[2]) else g
+		hd_skel.set_bone_pose_position(b[0], l.origin)
+		hd_skel.set_bone_pose_rotation(b[0], l.basis.get_rotation_quaternion())
+		hd_skel.set_bone_pose_scale(b[0], l.basis.get_scale())
+
 func _node(parent: Node3D, pos: Vector3) -> Node3D:
 	var n := Node3D.new(); n.position = pos; parent.add_child(n); return n
 
 func _part(name: String, parent: Node3D, mirror := false) -> bool:
-	var p := Game.kit_part(name, hd_src if name.ends_with("__hd") else null)
+	var p := Game.kit_part(name)
 	if p == null: return false
 	if mirror: p.scale.x = -1
 	parent.add_child(p)
@@ -121,8 +162,7 @@ func _leg(side: int, cls: String) -> Node3D:
 	var mr := side < 0
 	var L := _node(lower, Vector3(side * .13, .95, 0))
 	if hd_src:
-		_part("thigh__hd", L, mr); var Kh := _node(L, Vector3(0, -.44, 0)); _part("shin__hd", Kh, mr)
-		var Bh := _node(Kh, Vector3(0, -.42, 0)); _part("boot__hd", Bh, mr)
+		var Kh := _node(L, Vector3(0, -.44, 0)); var Bh := _node(Kh, Vector3(0, -.42, 0))
 		L.set_meta("knee", Kh); L.set_meta("boot", Bh); return L
 	_part("thigh", L, mr)
 	_part("thigh__pouch_L" if cls == "L" else "thigh__plate_" + cls, L, mr)
@@ -135,8 +175,8 @@ func _arm(side: int, cls: String) -> Node3D:
 	var mr := side < 0
 	var R := _node(upper, Vector3(side * .31, 1.6, 0))
 	if hd_src:
-		_part("upperarm__hd", R, mr); var Fh := _node(R, Vector3(0, -.3, 0)); _part("forearm__hd", Fh, mr)
-		_part("hand__hd", _node(Fh, Vector3(0, -.27, 0)), mr); R.set_meta("fore", Fh); return R
+		var Fh := _node(R, Vector3(0, -.3, 0)); R.set_meta("fore", Fh); R.set_meta("hand", _node(Fh, Vector3(0, -.27, 0)))
+		return R
 	_part("upperarm", R, mr)
 	if cls != "L": _part("upperarm__plate_" + cls, R, mr)
 	var F := _node(R, Vector3(0, -.3, 0)); _part("forearm", F, mr); _part("forearm__bracer_" + cls, F, mr)
@@ -218,6 +258,7 @@ func pose(dt: float, st: Dictionary) -> void:
 		else: hands = _climb_pose(u, st)
 	if not hands: _arms(rl, dd)
 	if cape: _cloth_step(dt, st.get("world_move", Vector3.ZERO))
+	if hd_skel: _hd_drive()
 
 func _blend_leg(L: Node3D, thigh: float, knee: float, boot: float, w: float) -> void:
 	var K: Node3D = L.get_meta("knee"); var B: Node3D = L.get_meta("boot")

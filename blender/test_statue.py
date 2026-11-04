@@ -1,5 +1,5 @@
-# Test helper for fit_model.py: merges the current Drakeguard kit into one A-posed statue, as an image-to-3D model
-# would deliver it, so the fitter can be checked against a known answer.
+# Test helper for skin_model.py: merges the current Drakeguard kit into one A-posed statue, as an image-to-3D model
+# would deliver it, so the skinning can be checked against a known answer.
 # MIT License. Copyright (c) 2026 Brian Guarino / Guarino Gaming Group (G3), a department of Guarino Industries LLC.
 import bpy, sys, math
 from mathutils import Matrix, Vector
