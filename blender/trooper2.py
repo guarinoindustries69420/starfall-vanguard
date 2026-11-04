@@ -173,16 +173,38 @@ for s in(-1,1):
 box('bp_back',(0,1.02,-.135),(.12,.065,.04),'trim',g,bevel=.012)
 box('holster',(.2,.92,.0),(.045,.15,.075),'dark',g,bevel=.012)
 box('holster_strap',(.2,.98,.0),(.05,.02,.08),'trim',g,bevel=.004)
-# backpack / power unit
-g='torso__pack'
-box('pk_main',(0,1.4,-.215),(.32,.36,.13),'trim',g,bevel=.03)
-box('pk_lid',(0,1.58,-.21),(.3,.04,.14),'dark',g,bevel=.012)
-cylz('pk_roll',(0,1.63,-.2),.045,.3,'acc',g,axis='x',verts=16)
-cylz('pk_cell',(-.1,1.36,-.3),.042,.26,'metal',g,axis='y',verts=16)
-ring('pk_glow',(-.1,1.36,-.3),.044,.044,.03,.006,'glow',g)
-box('pk_side',(.1,1.35,-.29),(.08,.16,.04),'dark',g,bevel=.01)
-cylz('pk_ant',(.12,1.72,-.25),.007,.22,'metal',g,axis='y',verts=6)
-cylz('pk_antb',(.12,1.61,-.25),.016,.04,'dark',g,axis='y',verts=10)
+# ---------------- exosuit frame (every suit): the powered skeleton the plates hang on
+# spine rail with power cells and shoulder actuator mounts, on the torso
+g='torso__spine'
+tube('sp_rail',(0,1.12,-.175),(0,1.66,-.17),.02,.02,'metal',g,verts=10,rings=1)
+for i in range(5):box('sp_v%d'%i,(0,1.18+i*.11,-.18),(.09,.035,.05),'dark',g,bevel=.008)
+for sx in(-1,1):
+    cylz('sp_cell%d'%sx,(sx*.075,1.36,-.2),.032,.24,'metal',g,axis='y',verts=12)
+    ring('sp_glow%d'%sx,(sx*.075,1.36,-.2),.034,.034,.05,.006,'glow',g,verts=12)
+    box('sp_arm%d'%sx,(sx*.17,1.62,-.13),(.17,.04,.04),'dark',g,bevel=.008,rot=(0,0,-sx*.12))
+    cylz('sp_sh%d'%sx,(sx*.3,1.6,-.06),.05,.06,'metal',g,axis='x',verts=14)
+    cylz('sp_shc%d'%sx,(sx*.3,1.6,-.06),.028,.07,'dark',g,axis='x',verts=10)
+box('sp_base',(0,1.1,-.16),(.22,.05,.06),'dark',g,bevel=.01)
+# hip frame: a load ring at the belt with an actuator hub over each hip joint
+g='pelvis__frame'
+for sx in(-1,1):
+    cylz('hf_hub%d'%sx,(sx*.245,.95,0),.05,.05,'metal',g,axis='x',verts=14)
+    cylz('hf_core%d'%sx,(sx*.245,.95,0),.026,.06,'glow',g,axis='x',verts=10)
+    box('hf_bar%d'%sx,(sx*.21,.99,-.06),(.06,.03,.1),'dark',g,bevel=.006)
+# leg and arm struts on the outside of each limb, with hubs at the knee, ankle and elbow (right side; mirrored in game)
+SX=.15
+tube('tf_strut',(X+SX,.9,0),(X+SX-.01,.55,0),.014,.014,'metal','thigh__frame',verts=8,rings=1)
+box('tf_clamp',(X+SX-.01,.78,0),(.03,.04,.05),'dark','thigh__frame',bevel=.006)
+cylz('tf_knee',(X+SX-.01,.51,0),.042,.04,'metal','thigh__frame',axis='x',verts=14)
+cylz('tf_kneec',(X+SX-.01,.51,0),.022,.05,'dark','thigh__frame',axis='x',verts=10)
+tube('sf_strut',(X+.125,.47,0),(X+.115,.13,0),.012,.012,'metal','shin__frame',verts=8,rings=1)
+box('sf_clamp',(X+.12,.3,0),(.026,.04,.045),'dark','shin__frame',bevel=.006)
+cylz('sf_ankle',(X+.11,.1,0),.03,.035,'metal','shin__frame',axis='x',verts=12)
+tube('uf_strut',(AX+.1,1.55,0),(AX+.095,1.34,0),.012,.012,'metal','upperarm__frame',verts=8,rings=1)
+box('uf_clamp',(AX+.097,1.45,0),(.024,.04,.04),'dark','upperarm__frame',bevel=.005)
+cylz('ff_elbow',(AX+.09,1.3,0),.034,.036,'metal','forearm__frame',axis='x',verts=12)
+cylz('ff_elbowc',(AX+.09,1.3,0),.018,.044,'dark','forearm__frame',axis='x',verts=10)
+tube('ff_strut',(AX+.088,1.27,0),(AX+.08,1.09,0),.011,.011,'metal','forearm__frame',verts=8,rings=1)
 # tabard (Warden)
 g='torso__tabard'
 plate('tab',(0,.8,.135),(.095,.2,.02),'cape',g,sq=.25,rot=(.12,0,0),cuts=[((0,0,0),(0,0,-1))],thick=.008,seg=11,rings=8)
@@ -191,12 +213,11 @@ box('tab_band',(0,1.0,.15),(.25,.03,.02),'trim',g,bevel=.005)
 def pauld(k,r,tiers):
     g='torso__pauld_'+k
     for s in(-1,1):
-        for t in range(tiers):
-            rr=(r[0]*(1-.08*t),r[1],r[2]*(1-.06*t))
-            plate('p%s%d_%d'%(k,s,t),(s*(.34+.02*t+r[0]*.2),1.62-t*.048,0),rr,'base' if t%2==0 else 'trim',g,sq=.62,
-                  rot=(0,0,-s*(.42+.12*t)),cuts=[((0,-r[1]*.25,0),(0,-1,0)),((-s*r[0]*.55,0,0),(-s,0,0))],thick=.02,seg=14,rings=8)
-        bpy.context.view_layer.update();rivets('p%s%d_0'%(k,s),[(s*(.33+r[0]*.2+dx),1.75,dz) for dx in(-.04,.03) for dz in(-.06,.06)],g,d=(0,-1,0))
-        if k=='H':box('pH_ridge%d'%s,(s*.36,1.69,0),(.018,.025,r[2]*1.5),'acc',g,bevel=.006,rot=(0,0,-s*.42))
+        cylz('p%s%d_hub'%(k,s),(s*.33,1.6,0),.05,.07,'metal',g,axis='x',verts=14)
+        for t in range(tiers):           # flat chamfered plates stepping down the outside of the shoulder
+            w,h,d=r[0]*1.5-.012*t,.022,r[2]*1.6-.02*t
+            box('p%s%d_%d'%(k,s,t),(s*(.35+r[0]*.35+.018*t),1.665-t*.045,0),(w,h,d),'base' if t%2==0 else 'trim',g,bevel=.008,rot=(0,0,-s*(.32+.16*t)))
+        box('p%s%d_edge'%(k,s),(s*(.35+r[0]*.35+r[0]*.6),1.62-(tiers-1)*.045,0),(.016,.03,r[2]*1.5),'dark',g,bevel=.004,rot=(0,0,-s*.5))
 pauld('L',(.08,.04,.095),1)
 pauld('M',(.105,.05,.125),2)
 pauld('H',(.13,.06,.155),3)
@@ -312,8 +333,8 @@ ring('tb_band',(0,.03,.45),.068,.068,.03,.008,'acc',g,axis='zf',verts=16)
 
 
 # ---------------- Drakeguard, second pass: built to match the Drakeguard concept (original design) ----------------
-# Heavy navy plate with gold rims along every edge, gold roundels and rivets, big layered pauldrons, a dragon-snout
-# helm with red eyes, a maroon tabard, leather pouches, a backpack canister, large knee cops and armoured sabatons.
+# Heavy navy plate on the exosuit frame, angular shoulder housings, a dragon-snout helm with red eyes and gold horns,
+# leather pouches, large knee cops and armoured sabatons. Exosuit pass: no gold rims, roundels, studs or tabard.
 def band(name,c,r,mat,grp,keep,sq=.55,taper=0,dz=0,rot=(0,0,0),thick=.008,k=1.03,seg=22,rings=16):
     # a gold rim: the same shell as a plate, a little larger, cut down to a narrow strip along one of its edges
     return plate(name,c,(r[0]*k,r[1]*k,r[2]*k),mat,grp,sq=sq,taper=taper,dz=dz*k,rot=rot,cuts=keep,thick=thick,seg=seg,rings=rings,angle=40)
@@ -338,42 +359,33 @@ g='torso__chest_D';cy=1.43;rx,ry,rz=.238,.188,.16
 FRONT=dict(sq=.55,taper=.2,dz=.03)
 plate('cD_front',(0,cy,0),(rx,ry,rz),'base',g,cuts=[((0,0,.02),(0,0,-1)),((0,ry*.88,0),(0,1,0)),((0,-ry*.8,0),(0,-1,0))],thick=.028,seg=20,rings=14,**FRONT)
 plate('cD_back',(0,cy,-.005),(rx*.97,ry*.95,rz*.92),'base',g,sq=.55,taper=.15,cuts=[((0,0,-.03),(0,0,1)),((0,ry*.85,0),(0,1,0)),((0,-ry*.8,0),(0,-1,0))],thick=.026)
-band('cD_rimTop',(0,cy,0),(rx,ry,rz),'gold',g,[((0,0,.02),(0,0,-1)),((0,ry*.9,0),(0,1,0)),((0,ry*.77,0),(0,-1,0))],**FRONT)
-band('cD_rimBot',(0,cy,0),(rx,ry,rz),'gold',g,[((0,0,.02),(0,0,-1)),((0,-ry*.68,0),(0,1,0)),((0,-ry*.82,0),(0,-1,0))],**FRONT)
-band('cD_rimSide',(0,cy,0),(rx,ry,rz),'gold',g,[((0,0,.02),(0,0,-1)),((0,0,.052),(0,0,1)),((0,ry*.88,0),(0,1,0)),((0,-ry*.8,0),(0,-1,0))],**FRONT)
+band('cD_rimTop',(0,cy,0),(rx,ry,rz),'trim',g,[((0,0,.02),(0,0,-1)),((0,ry*.9,0),(0,1,0)),((0,ry*.77,0),(0,-1,0))],**FRONT)
+band('cD_rimBot',(0,cy,0),(rx,ry,rz),'trim',g,[((0,0,.02),(0,0,-1)),((0,-ry*.68,0),(0,1,0)),((0,-ry*.82,0),(0,-1,0))],**FRONT)
+band('cD_rimSide',(0,cy,0),(rx,ry,rz),'trim',g,[((0,0,.02),(0,0,-1)),((0,0,.052),(0,0,1)),((0,ry*.88,0),(0,1,0)),((0,-ry*.8,0),(0,-1,0))],**FRONT)
 plate('cD_keel',(0,cy-.01,rz+.015),(.02,ry*.7,.018),'trim',g,sq=.5,cuts=[((0,0,0),(0,0,-1))],thick=.008,seg=10,rings=8)
 bpy.context.view_layer.update()
-roundel('cD_rdL','cD_front',-.12,cy+.07,.0,g,r=.034);roundel('cD_rdR','cD_front',.12,cy+.07,.0,g,r=.034)
-roundel('cD_rdC','cD_front',0,cy-.05,.0,g,r=.03)
-studs('cD_front',[(sx*rx*.8,cy+dy,0) for sx in(-1,1) for dy in(-.09,0,.09)],g)
+
+
+
 # abdomen lames, each with a gold lower edge
 for i in range(3):
     y=cy-ry*.8-.034-i*.056;lr=(rx*.8-i*.014,.044,rz*.9)
     plate('cD_lame%d'%i,(0,y,-.005),lr,'base',g,sq=.5,cuts=[((0,0,0),(0,0,-1)),((0,.03,0),(0,1,0)),((0,-.03,0),(0,-1,0))],thick=.02,seg=16,rings=8)
-    band('cD_lameG%d'%i,(0,y,-.005),lr,'gold',g,[((0,0,0),(0,0,-1)),((0,-.019,0),(0,1,0)),((0,-.032,0),(0,-1,0))],sq=.5,seg=18,rings=10,k=1.02)
+    band('cD_lameG%d'%i,(0,y,-.005),lr,'trim',g,[((0,0,0),(0,0,-1)),((0,-.019,0),(0,1,0)),((0,-.032,0),(0,-1,0))],sq=.5,seg=18,rings=10,k=1.02)
 for s in(-1,1):box('cD_strap%d'%s,(s*rx*.96,cy-.02,-.005),(.024,.16,.12),'leather',g,bevel=.006)
 # maroon gorget and a gold collar
 ring('cD_gorget',(0,1.672,0),.108,.094,.08,.02,'cloth',g,verts=20)
-ring('cD_collarG',(0,1.715,0),.113,.099,.012,.007,'gold',g,verts=20)
-# pauldrons: two big rounded tiers with gold rims, a roundel and studs
-g='torso__pauld_D'
-for sx in(-1,1):
-    for t in range(2):
-        pr=(.15*(1-.1*t),.085*(1-.1*t),.17*(1-.07*t));pc=(sx*(.36+.025*t),1.635-t*.06,0);rot=(0,0,-sx*(.46+.18*t))
-        cutp=[((0,-pr[1]*.15,0),(0,-1,0)),((-sx*pr[0]*.6,0,0),(-sx,0,0))]
-        plate('pD%d_%d'%(sx,t),pc,pr,'base',g,sq=.7,rot=rot,cuts=cutp,thick=.024,seg=18,rings=12)
-        band('pDg%d_%d'%(sx,t),pc,pr,'gold',g,[((0,-pr[1]*.15,0),(0,-1,0)),((0,pr[1]*.12,0),(0,1,0)),((-sx*pr[0]*.6,0,0),(-sx,0,0))],sq=.7,rot=rot,thick=.009)
-    bpy.context.view_layer.update()
-    roundel('pDr%d'%sx,'pD%d_0'%sx,sx*.43,1.7,0,g,r=.03,d=(-sx*.6,-1,0))
-    studs('pD%d_0'%sx,[(sx*(.38+dx),1.75,dz) for dx in(-.05,.02) for dz in(-.1,.1)],g,d=(0,-1,0))
+ring('cD_collarG',(0,1.715,0),.113,.099,.012,.007,'trim',g,verts=20)
+# shoulders: actuator housings with three flat layered plates (no rounded pauldrons)
+pauld('D',(.14,.06,.16),3)
 # upper arm plate, elbow cop and bracer, all gold-banded
 g='upperarm__plate_D'
 tube('uaD',(AX,1.53,0),(AX,1.36,0),.083,.072,'base',g,cuts=[((AX-.012,0,0),(-1,0,0))],thick=.018,bevel=.004,caps=False,rings=2)
-ring('uaD_g',(AX,1.37,0),.075,.075,.014,.006,'gold',g)
+ring('uaD_g',(AX,1.37,0),.075,.075,.014,.006,'trim',g)
 g='forearm__bracer_D'
 tube('brD',(AX,1.27,0),(AX,1.07,0),.074,.064,'base',g,caps=False,thick=.018,rings=1,verts=14,sz=1.1)
-ring('brD_g1',(AX,1.262,0),.079,.086,.016,.007,'gold',g)
-ring('brD_g2',(AX,1.08,0),.069,.075,.016,.007,'gold',g)
+ring('brD_g1',(AX,1.262,0),.079,.086,.016,.007,'trim',g)
+ring('brD_g2',(AX,1.08,0),.069,.075,.016,.007,'trim',g)
 ell('epD',(AX,1.3,-.035),(.06,.065,.05),'base',g,cuts=[((0,0,-.01),(0,0,1))],thick=.016)
 ring('epD_g',(AX,1.3,-.04),.062,.05,.012,.006,'gold',g,axis='zf')
 # leather belt gear: pouch, holster, buckle
@@ -385,42 +397,29 @@ box('blD_flap',(-.19,1.015,.075),(.064,.03,.08),'leather',g,bevel=.008,rot=(0,.4
 box('blD_holster',(.2,.9,.02),(.05,.17,.085),'leather',g,bevel=.014)
 box('blD_hstrap',(.2,.96,.02),(.056,.02,.09),'gold',g,bevel=.004)
 box('blD_rear',(0,1.0,-.14),(.13,.07,.045),'leather',g,bevel=.012)
-# backpack canister standing up behind the shoulders
-g='torso__pack_D'
-box('pkD_frame',(0,1.42,-.2),(.26,.3,.07),'trim',g,bevel=.02)
-cylz('pkD_can',(-.04,1.55,-.28),.095,.34,'base',g,axis='y',verts=22)
-ring('pkD_g1',(-.04,1.71,-.28),.097,.097,.016,.007,'gold',g,verts=22)
-ring('pkD_g2',(-.04,1.4,-.28),.097,.097,.016,.007,'gold',g,verts=22)
-cylz('pkD_cap',(-.04,1.73,-.28),.07,.03,'trim',g,axis='y',verts=18)
-cylz('pkD_cell',(.12,1.4,-.27),.04,.2,'metal',g,axis='y',verts=14)
-ring('pkD_glow',(.12,1.4,-.27),.042,.042,.026,.006,'glow',g)
-# maroon tabard from the belt to the knees, with a darker hem
-g='pelvis__tabard_D'
-plate('cD_tab',(0,.77,.155),(.105,.24,.022),'cloth',g,sq=.25,rot=(.08,0,0),cuts=[((0,0,0),(0,0,-1))],thick=.012,seg=12,rings=12)
-box('cD_tabHem',(0,.545,.178),(.2,.018,.012),'dark',g,bevel=.003)
 # thigh tassets with gold hems
 g='thigh__plate_D'
 tube('tD',(X,.93,.0),(X,.62,.0),.136,.112,'base',g,cuts=[((0,0,-.05),(0,0,-1))],thick=.024,caps=False,rings=3)
-ring('tD_g',(X,.63,0),.115,.115,.016,.007,'gold',g)
+ring('tD_g',(X,.63,0),.115,.115,.016,.007,'trim',g)
 for k in range(2):                           # two layered tassets over the front of the thigh, gold along the hem
     tc=(X,.9-k*.1,.11-k*.01);tr=(.12-k*.01,.075,.05)
     plate('tDt%d'%k,tc,tr,'base',g,sq=.55,rot=(.1,0,0),cuts=[((0,0,0),(0,0,-1)),((0,-.04,0),(0,-1,0))],thick=.018,seg=14,rings=10)
-    band('tDtg%d'%k,tc,tr,'gold',g,[((0,0,0),(0,0,-1)),((0,-.04,0),(0,-1,0)),((0,-.026,0),(0,1,0))],sq=.55,rot=(.1,0,0),thick=.008)
+    band('tDtg%d'%k,tc,tr,'trim',g,[((0,0,0),(0,0,-1)),((0,-.04,0),(0,-1,0)),((0,-.026,0),(0,1,0))],sq=.55,rot=(.1,0,0),thick=.008)
 # knee cops, greaves and sabatons
 g='shin__greave_D'
 tube('shD',(X,.47,0),(X,.13,.0),.1,.084,'base',g,cuts=[((0,0,-.05),(0,0,-1))],thick=.024,caps=False,rings=3)
-ring('shD_gt',(X,.46,0),.103,.103,.016,.007,'gold',g);ring('shD_gb',(X,.14,0),.088,.088,.016,.007,'gold',g)
+ring('shD_gt',(X,.46,0),.103,.103,.016,.007,'trim',g);ring('shD_gb',(X,.14,0),.088,.088,.016,.007,'trim',g)
 sc,sr=(X,.31,.075),(.072,.13,.04)            # a raised shin guard down the front, gold-rimmed, with a roundel
 plate('shDf',sc,sr,'base',g,sq=.55,rot=(-.05,0,0),cuts=[((0,0,0),(0,0,-1))],thick=.016,seg=14,rings=12)
-band('shDfg',sc,sr,'gold',g,[((0,0,0),(0,0,-1)),((0,0,.016),(0,0,1))],sq=.55,rot=(-.05,0,0),thick=.007)
-bpy.context.view_layer.update();roundel('shDr','shDf',X,.31,0,g,r=.022)
+band('shDfg',sc,sr,'trim',g,[((0,0,0),(0,0,-1)),((0,0,.016),(0,0,1))],sq=.55,rot=(-.05,0,0),thick=.007)
+
 plate('kpD',(X,.515,.055),(.085,.095,.06),'base',g,sq=.62,rot=(-.12,0,0),cuts=[((0,0,0),(0,0,-1))],thick=.02,seg=16,rings=12)
-band('kpDg',(X,.515,.055),(.085,.095,.06),'gold',g,[((0,0,0),(0,0,-1)),((0,0,.022),(0,0,1))],sq=.62,rot=(-.12,0,0),thick=.008)
-bpy.context.view_layer.update();roundel('kpDr','kpD',X,.515,.0,g,r=.026)
+band('kpDg',(X,.515,.055),(.085,.095,.06),'trim',g,[((0,0,0),(0,0,-1)),((0,0,.022),(0,0,1))],sq=.62,rot=(-.12,0,0),thick=.008)
+
 g='boot__sabaton_D'
 plate('sbD',(X,.065,.075),(.07,.055,.14),'base',g,sq=.6,cuts=[((0,-.02,0),(0,-1,0)),((0,0,-.05),(0,0,-1))],thick=.016,seg=16,rings=10)
-band('sbDg',(X,.065,.075),(.07,.055,.14),'gold',g,[((0,-.02,0),(0,-1,0)),((0,0,-.05),(0,0,-1)),((0,.0,0),(0,1,0))],sq=.6,thick=.008)
-ring('sbD_ank',(X,.2,0),.07,.07,.016,.007,'gold',g)
+band('sbDg',(X,.065,.075),(.07,.055,.14),'trim',g,[((0,-.02,0),(0,-1,0)),((0,0,-.05),(0,0,-1)),((0,.0,0),(0,1,0))],sq=.6,thick=.008)
+ring('sbD_ank',(X,.2,0),.07,.07,.016,.007,'trim',g)
 # Dragon helm: navy dome, dark visor with red eyes, a dragon snout and brow over the face, swept horns and fins
 g='head__dragon'
 plate('hD_shell',HC,(.14,.155,.165),'base',g,sq=.86,taper=.06,cuts=[((0,-.135,0),(0,-1,0))],thick=.02,seg=22,rings=14)

@@ -312,7 +312,7 @@ func fire_bolt(from: Vector3, dir: Vector3, speed: float, dmg: float, from_playe
 	var fl := OmniLight3D.new(); fl.light_color = col; fl.light_energy = 2.0; fl.omni_range = 4.0; fl.position = from; add_child(fl)
 	get_tree().create_timer(.05, false).timeout.connect(fl.queue_free)
 
-func throw_grenade(by: Unit, target: Vector3) -> void:
+func throw_grenade(by: Unit, target: Vector3, reach := 1.0) -> void:
 	var g := RigidBody3D.new(); g.collision_layer = 0; g.collision_mask = L_WORLD; g.mass = .5
 	var cs := CollisionShape3D.new(); var sh := SphereShape3D.new(); sh.radius = .12; cs.shape = sh; g.add_child(cs)
 	var mi := MeshInstance3D.new(); var sm := SphereMesh.new(); sm.radius = .12; sm.height = .24; mi.mesh = sm
@@ -324,17 +324,17 @@ func throw_grenade(by: Unit, target: Vector3) -> void:
 	var T: float = clamp(flat / 16.0, .45, 1.2)
 	g.linear_velocity = Vector3(to.x / T, (to.y + .5 * 19.6 * T * T) / T, to.z / T)
 	get_tree().create_timer(1.7, false).timeout.connect(func():
-		if is_instance_valid(g): explode(g.global_position, 5.0, 160.0, 2.2); g.queue_free())
+		if is_instance_valid(g): explode(g.global_position, 5.0 * reach, 160.0, 2.2); g.queue_free())
 
-# artillery: a red marker goes down, then six shells land around it over a few seconds
-func call_barrage(center: Vector3) -> void:
+# artillery: a red marker goes down, then six shells land around it over a few seconds; lead is the wait for the first
+func call_barrage(center: Vector3, lead := 2.0) -> void:
 	center.y = terrain.height_at(center.x, center.z)
 	var beacon := OmniLight3D.new(); beacon.light_color = Color("ff3a2a"); beacon.light_energy = 3.0; beacon.omni_range = 6.0; beacon.position = center + Vector3(0, .6, 0); add_child(beacon)
 	get_tree().create_timer(6.5, false).timeout.connect(beacon.queue_free)
 	for i in 6:
 		var a := rng.randf() * TAU; var rr := sqrt(rng.randf()) * 9.0
 		var p := center + Vector3(cos(a) * rr, 0, sin(a) * rr)
-		get_tree().create_timer(2.0 + i * .6, false).timeout.connect(func(): _shell(p))
+		get_tree().create_timer(lead + i * .6, false).timeout.connect(func(): _shell(p))
 
 func _shell(p: Vector3) -> void:
 	p.y = terrain.height_at(p.x, p.z)
@@ -361,7 +361,7 @@ func explode(pos: Vector3, radius: float, dmg: float, crater_r := 0.0) -> void:
 	for e in get_tree().get_nodes_in_group("enemies"):
 		var d: float = e.global_position.distance_to(pos)
 		if d < radius: e.hurt(dmg * (1.0 - .5 * d / radius))
-	if is_instance_valid(player) and player.global_position.distance_to(pos) < radius: player.hurt(dmg * .5)
+	if is_instance_valid(player) and player.global_position.distance_to(pos) < radius: player.hurt(dmg * .5, true)
 	var gy := terrain.height_at(pos.x, pos.z)
 	if crater_r > 0 and pos.y - gy < 1.2:
 		var cp := Vector3(pos.x, gy, pos.z)
@@ -444,7 +444,9 @@ func _process(dt: float) -> void:
 		hud_hp.value = player.hp
 		var wpn := "Reloading" if player.reload_t > 0 else "K-7 Pulse Rifle"
 		var art := "ready" if player.barrage_cd <= 0 else "%d s" % int(ceil(player.barrage_cd))
-		hud_label.text = "%s   %d / %d     Grenades %d     Artillery %s     Kills %d" % [wpn, player.ammo, player.mag, player.grenades, art, kills]
+		var su: Dictionary = Game.SUITS[player.suit]; var pas: String = su.passive
+		if player.mods.reactive: pas += " ON" if player.plate_t > 0 else (" %d s" % int(ceil(player.plate_cd)) if player.plate_cd > 0 else " ready")
+		hud_label.text = "%s   %d / %d     Grenades %d     Artillery %s     Kills %d     %s: %s" % [wpn, player.ammo, player.mag, player.grenades, art, kills, su.name, pas]
 		hud_hint.text = "%s fire   %s steady   %s dive / vault / climb   %s crouch   %s reload   %s grenade   %s artillery   %s sprint   %s pause" % [
 			Game.prompt("fire"), Game.prompt("steady"), Game.prompt("roll"), Game.prompt("crouch"), Game.prompt("reload"),
 			Game.prompt("grenade"), Game.prompt("barrage"), Game.prompt("sprint"), Game.prompt("pause")]
@@ -483,6 +485,33 @@ func _pad_button(b: int, down: bool) -> void:
 
 func _at(t: float, dt: float) -> bool: return test_t - dt < t and test_t >= t
 
+# every exosuit builds, and each passive does what its card says (tried on the live player, then put back)
+func _suit_checks() -> void:
+	var P = player; var keep: String = P.suit
+	var built := 0
+	for id in Game.SUIT_ORDER:
+		P.wear(id)
+		if P.model.leg_l != null and P.model.gun != null: built += 1
+	_check("every exosuit builds", built == Game.SUIT_ORDER.size(), "%d of %d" % [built, Game.SUIT_ORDER.size()])
+	var M := func(id: String) -> Dictionary: return Game.suit_mod(id)
+	var ok: bool = M.call("pathfinder").speed > M.call("vanguard").speed and M.call("vanguard").speed > M.call("bulwark").speed \
+		and M.call("pathfinder").taken > M.call("vanguard").taken and M.call("vanguard").taken > M.call("bulwark").taken
+	_check("light is fastest and thinnest, heavy slowest and toughest", ok, "speed %.2f %.2f %.2f, damage taken %.2f %.2f %.2f" % [M.call("pathfinder").speed, M.call("vanguard").speed, M.call("bulwark").speed, M.call("pathfinder").taken, M.call("vanguard").taken, M.call("bulwark").taken])
+	var res := []
+	P.wear("bulwark"); P.hp = 100.0; P.hurt(100.0, true); var hb: float = 100.0 - P.hp
+	P.wear("sentinel"); P.hp = 100.0; P.hurt(100.0, true); var hs: float = 100.0 - P.hp
+	res.append(["Blast Dampers halve blast damage", abs(hb - hs * .5) < .01, "%.1f against %.1f for another heavy" % [hb, hs]])
+	P.wear("drakeguard"); P.hp = 50.0; P.hurt(30.0); var first: float = 50.0 - P.hp; var on: float = P.plate_t; P.hurt(10.0); var second: float = 50.0 - first - P.hp
+	res.append(["Reactive Plating hardens under 35 health", on > 2.9 and abs(first - 30.0 * .7 * .5) < .01 and abs(second - 10.0 * .7 * .5) < .01, "first hit %.2f, next %.2f, plates %.1f s" % [first, second, on]])
+	res.append(["Ordnance Rack carries 7 grenades", P.grenades == 4 and Game.suit_mod("ashwalker").grenades == 7 and Game.suit_mod("ashwalker").grenade_r > 1.3, ""])
+	res.append(["Autoloader reloads faster", Game.suit_mod("vanguard").reload < Game.suit_mod("warden").reload * .6, "%.2f s" % Game.suit_mod("vanguard").reload])
+	res.append(["Uplink Array calls artillery sooner", Game.suit_mod("sentinel").barrage_cd < 30.0 and Game.suit_mod("sentinel").barrage_lead < 2.0, ""])
+	res.append(["Servo Striders sprint faster and dive sooner", Game.suit_mod("pathfinder").sprint > 1.8 and Game.suit_mod("pathfinder").dive_cd < Game.suit_mod("ashwalker").dive_cd, ""])
+	P.wear("warden"); P.hp = 40.0; P.calm_t = 10.0
+	test.regen_from = 40.0
+	for r in res: _check(r[0], r[1], r[2])
+	test.keep_suit = keep
+
 func _test(dt: float) -> void:
 	test_t += dt
 	var P: Unit = player
@@ -492,6 +521,10 @@ func _test(dt: float) -> void:
 		if b.craters.size() > 0:
 			var c0: Array = b.craters[0]; _check("saved crater is dug in on reload", terrain.height_at(c0[0], c0[1]) < -.3, "depth %.2f" % terrain.height_at(c0[0], c0[1]))
 		test.start = P.global_position
+		_suit_checks()
+	if _at(.6, dt):
+		_check("Trauma Injector heals after 4 s without a hit", P.hp > test.regen_from + 2.0, "%.1f -> %.1f" % [test.regen_from, P.hp])
+		P.wear(test.keep_suit); P.hp = 100.0
 	# 1. controller: left stick moves, right stick aims, Circle crouches
 	if _at(.1, dt): _pad_axis(JOY_AXIS_LEFT_X, 1.0); _pad_axis(JOY_AXIS_RIGHT_X, -1.0)
 	if _at(.8, dt):

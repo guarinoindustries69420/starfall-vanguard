@@ -1,7 +1,8 @@
 # Starfall Vanguard: shared game state, controls, factions, the Blender trooper kit and the saved state of battlefields.
 # PC game. Keyboard and mouse, or a controller using the standard PlayStation 5 DualSense layout:
 #   left stick move, L3 sprint, right stick aim, R2 fire, L2 steady aim, R1 grenade, L1 artillery call-in,
-#   Cross dive (vault or climb when something is in the way), Circle crouch, Square reload, Options pause.
+#   Cross dive (vault or climb when something is in the way), Circle crouch, Square reload, Options pause,
+#   Triangle change exosuit on the war map.
 # MIT License. Copyright (c) 2026 Brian Guarino / Guarino Gaming Group (G3), a department of Guarino Industries LLC.
 extends Node
 
@@ -12,6 +13,46 @@ const FACTIONS := {
 	"swarm": {"name": "Hollow Swarm", "base": Color("4a5a3a"), "trim": Color("1c2414"), "acc": Color("a8de5c")},
 	"wyrm": {"name": "Wyrm Lord", "base": Color("253148"), "trim": Color("161b28"), "acc": Color("d4a640")},
 }
+# ---- exosuits: powered armour on a load-bearing frame. The weight class sets pace, protection and the dive;
+# each suit carries one passive that changes how it plays. "kit" and "helm" pick its look from the built trooper kit.
+const SUIT_WEIGHT := {
+	"light": {"name": "Light", "speed": 1.12, "taken": 1.2, "dive_cd": .6},
+	"medium": {"name": "Medium", "speed": 1.0, "taken": 1.0, "dive_cd": .9},
+	"heavy": {"name": "Heavy", "speed": .86, "taken": .7, "dive_cd": 1.3},
+}
+const SUITS := {
+	"pathfinder": {"name": "Pathfinder", "weight": "light", "kit": "pathfinder", "helm": "hood", "passive": "Servo Striders",
+		"desc": "Leg servos: sprint 30% faster and the dive recovers twice as fast."},
+	"ashwalker": {"name": "Ashwalker", "weight": "light", "kit": "ashwalker", "helm": "mask", "passive": "Ordnance Rack",
+		"desc": "Hip racks: three extra grenades, and each blast reaches 40% further."},
+	"vanguard": {"name": "Vanguard", "weight": "medium", "kit": "vanguard", "helm": "visor", "passive": "Autoloader",
+		"desc": "Forearm feed: reloads take 45% less time."},
+	"warden": {"name": "Warden", "weight": "medium", "kit": "warden", "helm": "crest", "passive": "Trauma Injector",
+		"desc": "After 4 s without a hit, the suit doses you back up to full at 6 health a second."},
+	"bulwark": {"name": "Bulwark", "weight": "heavy", "kit": "bulwark", "helm": "dome", "passive": "Blast Dampers",
+		"desc": "Shock-mounted frame: explosions, your own included, do half their usual damage to you."},
+	"sentinel": {"name": "Sentinel", "weight": "heavy", "kit": "sentinel", "helm": "antenna", "passive": "Uplink Array",
+		"desc": "Long-range mast: artillery is ready again in 25 s instead of 45, and the first shell lands a second sooner."},
+	"drakeguard": {"name": "Drakeguard", "weight": "heavy", "kit": "drakeguard", "helm": "dragon", "passive": "Reactive Plating",
+		"desc": "A hit that would drop you under 35 health hardens the plates: half damage for 3 s. Recharges in 20 s."},
+}
+const SUIT_ORDER := ["pathfinder", "ashwalker", "vanguard", "warden", "bulwark", "sentinel", "drakeguard"]
+
+# the numbers a suit plays with: its weight class, then its passive on top
+static func suit_mod(id: String) -> Dictionary:
+	var su: Dictionary = SUITS.get(id, SUITS.vanguard); var w: Dictionary = SUIT_WEIGHT[su.weight]
+	var m := {"speed": w.speed, "taken": w.taken, "dive_cd": w.dive_cd, "sprint": 1.45, "reload": 1.7, "grenades": 4,
+		"grenade_r": 1.0, "barrage_cd": 45.0, "barrage_lead": 2.0, "blast": 1.0, "regen": 0.0, "reactive": false}
+	match su.passive:
+		"Servo Striders": m.sprint = 1.45 * 1.3; m.dive_cd = w.dive_cd * .5
+		"Ordnance Rack": m.grenades = 7; m.grenade_r = 1.4
+		"Autoloader": m.reload = 1.7 * .55
+		"Trauma Injector": m.regen = 6.0
+		"Blast Dampers": m.blast = .5
+		"Uplink Array": m.barrage_cd = 25.0; m.barrage_lead = 1.0
+		"Reactive Plating": m.reactive = true
+	return m
+
 const GALAXY_SEED := 31
 const CAMPAIGN_PATH := "user://campaign.json"
 const SAVE_PATH := "user://battlefields.json"
@@ -19,10 +60,11 @@ const SAVE_PATH := "user://battlefields.json"
 # Prompts for each action, for the pad (PS5 glyph names) and for keyboard and mouse.
 const PROMPTS := {
 	"roll": ["Cross", "Space"], "crouch": ["Circle", "C"], "reload": ["Square", "R"], "grenade": ["R1", "G"],
-	"barrage": ["L1", "B"], "fire": ["R2", "Left mouse"], "steady": ["L2", "Right mouse"], "sprint": ["L3", "Shift"], "pause": ["Options", "Esc"],
+	"barrage": ["L1", "B"], "suit": ["Triangle", "Tab"], "fire": ["R2", "Left mouse"], "steady": ["L2", "Right mouse"], "sprint": ["L3", "Shift"], "pause": ["Options", "Esc"],
 }
 
 var player_faction := "concord"
+var suit := "drakeguard"           # the exosuit the player drops in, saved with the campaign
 var enemy_faction := "compact"
 var test_mode := false          # --sv-test: the mission drives itself and saves screenshots
 var fresh := false              # --sv-fresh: forget saved battle damage before starting
@@ -52,6 +94,7 @@ func _ready() -> void:
 	_bind_keys("pause", [KEY_ESCAPE]); _bind_pad("pause", JOY_BUTTON_START)           # Options
 	_bind_mouse("fire", MOUSE_BUTTON_LEFT); _bind_axis("fire", JOY_AXIS_TRIGGER_RIGHT, 1)       # R2
 	_bind_mouse("steady", MOUSE_BUTTON_RIGHT); _bind_axis("steady", JOY_AXIS_TRIGGER_LEFT, 1)   # L2
+	_bind_keys("suit", [KEY_TAB]); _bind_pad("suit", JOY_BUTTON_Y)                    # Triangle: change exosuit on the war map
 	_bind_keys("fullscreen", [KEY_F11])
 	# menus: Cross confirms and Circle backs out, as on the console
 	InputMap.action_add_event("ui_cancel", _pad_ev(JOY_BUTTON_B))
@@ -72,11 +115,12 @@ func _ready() -> void:
 		var d = JSON.parse_string(f.get_as_text()) if f else null
 		if d is Dictionary and d.get("seed", -1) == GALAXY_SEED:
 			galaxy.apply_owners(d.get("owners", {})); hm = d.get("hearts", {})
+			if SUITS.has(d.get("suit", "")): suit = d.suit
 	elif fresh and FileAccess.file_exists(CAMPAIGN_PATH): DirAccess.remove_absolute(ProjectSettings.globalize_path(CAMPAIGN_PATH))
 
 func save_campaign() -> void:
 	var f := FileAccess.open(CAMPAIGN_PATH, FileAccess.WRITE)
-	if f: f.store_string(JSON.stringify({"seed": GALAXY_SEED, "player": player_faction, "owners": galaxy.owners(), "hearts": hm}))
+	if f: f.store_string(JSON.stringify({"seed": GALAXY_SEED, "player": player_faction, "owners": galaxy.owners(), "hearts": hm, "suit": suit}))
 
 # drop onto a world: the mission there fights whoever holds or raids it, on that world's ground, with its own saved damage
 func deploy(i: int) -> void:

@@ -1,6 +1,7 @@
 # Starfall Vanguard: the galaxy map. Each faction's arm is shaded in its colour, borders glow where territories meet,
 # space lanes join the worlds, and a cockpit panel describes whatever world is selected. Mouse, keyboard or a PS5 pad:
-# left stick moves the cursor, right stick pans, L2 and R2 zoom, L1 and R1 jump between capitals, Cross drops in.
+# left stick moves the cursor, right stick pans, L2 and R2 zoom, L1 and R1 jump between capitals, Triangle (Tab) changes
+# the exosuit shown under the world list, Cross drops in.
 # MIT License. Copyright (c) 2026 Brian Guarino / Guarino Gaming Group (G3), a department of Guarino Industries LLC.
 extends Node2D
 
@@ -88,6 +89,8 @@ func _refresh() -> void:
 	for f in Galaxy.ORDER + ["neutral"]:
 		var mark := "  (you)" if f == Game.player_faction else ""
 		t += "[color=#%s]■[/color] %s  %d%s\n" % [_hex(Galaxy.FAC[f].color), Galaxy.FAC[f].name, G.count(f), mark]
+	var su: Dictionary = Game.SUITS[Game.suit]; var wt: Dictionary = Game.SUIT_WEIGHT[su.weight]
+	t += "\n[b]Exosuit:[/b] %s  (%s)   [color=#8fb8cc]%s change[/color]\n[b]%s.[/b] %s\n" % [su.name, wt.name, Game.prompt("suit"), su.passive, su.desc]
 	counts.text = t
 	if sel >= 0: info.text = _describe(sel)
 	var pad := Game.using_pad
@@ -177,8 +180,14 @@ func _unhandled_input(ev: InputEvent) -> void:
 		cam.position -= ev.relative / cam.zoom.x
 	elif ev.is_action_pressed("roll") and Game.using_pad: drop_in()
 	elif ev is InputEventKey and ev.pressed and (ev.keycode == KEY_ENTER or ev.keycode == KEY_KP_ENTER): drop_in()
+	elif ev.is_action_pressed("suit"): next_suit()
 	elif ev.is_action_pressed("barrage") or (ev is InputEventKey and ev.pressed and ev.keycode == KEY_Q): _cycle(-1)
 	elif ev.is_action_pressed("grenade") or (ev is InputEventKey and ev.pressed and ev.keycode == KEY_E): _cycle(1)
+
+# the next exosuit in the roster; the choice is saved with the campaign
+func next_suit() -> void:
+	var i := Game.SUIT_ORDER.find(Game.suit)
+	Game.suit = Game.SUIT_ORDER[(i + 1) % Game.SUIT_ORDER.size()]; Game.save_campaign(); _refresh()
 
 func _cycle(d: int) -> void:
 	cap_cycle = wrapi(cap_cycle + d, 0, Galaxy.ORDER.size())
@@ -232,7 +241,13 @@ func _checks() -> void:
 	ok.call("the same seed builds the same galaxy", g2.worlds.size() == G.worlds.size() and g2.worlds.all(func(w): return w.name == G.worlds[w.id].name and w.pos == G.worlds[w.id].pos), "")
 
 func _test(dt: float) -> void:
-	if test_t == 0.0: _checks()
+	if test_t == 0.0:
+		_checks()
+		var s0 := Game.suit; next_suit(); var s1 := Game.suit
+		var f := FileAccess.open(Game.CAMPAIGN_PATH, FileAccess.READ); var d = JSON.parse_string(f.get_as_text()) if f else null
+		print("CHECK ", "PASS " if s1 != s0 and d is Dictionary and d.get("suit", "") == s1 and counts.text.contains(Game.SUITS[s1].name) else "FAIL ",
+			"Triangle changes the exosuit, the panel shows it and the campaign saves it  ", "%s -> %s" % [s0, s1])
+		Game.suit = s0; Game.save_campaign(); _refresh()
 	test_t += dt
 	var shots := {0.6: "galaxy_full", 1.2: "galaxy_close", 1.8: "galaxy_neutral"}
 	for at in shots:

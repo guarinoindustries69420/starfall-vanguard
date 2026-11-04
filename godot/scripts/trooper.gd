@@ -92,13 +92,12 @@ func build(armor: String, helm: String, pal: Dictionary, with_cape: bool, weapon
 		_gun(weapon, with_cape); return
 	armor = armor.trim_suffix("_hd")         # no fitted model on disk: wear the built kit of the same armor
 	cls = ARMOR_CLASS.get(armor, "M")
-	var pelvis := _node(lower, Vector3(0, .98, 0)); _part("pelvis", pelvis)
-	if armor == "drakeguard": _part("pelvis__tabard_D", pelvis)
+	var pelvis := _node(lower, Vector3(0, .98, 0)); _part("pelvis", pelvis); _part("pelvis__frame", pelvis)
 	leg_l = _leg(-1, cls); leg_r = _leg(1, cls)
 	var torso := _node(upper, Vector3(0, 1.05, 0))
 	_part("torso", torso)
 	_part("torso__chest_" + cls, torso); _part("torso__belt", torso); _part("torso__pauld_" + cls, torso)
-	_part("torso__pack_D" if cls == "D" else "torso__pack", torso)
+	_part("torso__spine", torso)               # the exosuit's spine frame and power cells, in place of a backpack
 	if cls == "D": _part("torso__belt_D", torso)
 	if armor == "warden": _part("torso__tabard", torso)
 	arm_l = _arm(-1, cls); arm_r = _arm(1, cls)
@@ -107,7 +106,30 @@ func build(armor: String, helm: String, pal: Dictionary, with_cape: bool, weapon
 	_part(hk.get(helm, "head__visor"), head)
 	if helm == "crest": _part("head__crest", head)
 	if helm == "antenna": _part("head__antenna", head)
+	_piston(leg_l, Vector3(-.15, -.24, -.06), leg_l.get_meta("knee"), Vector3(-.13, -.12, -.055))   # behind each knee
+	_piston(leg_r, Vector3(.15, -.24, -.06), leg_r.get_meta("knee"), Vector3(.13, -.12, -.055))
+	_piston(arm_l, Vector3(-.1, -.12, -.05), arm_l.get_meta("fore"), Vector3(-.09, -.1, -.045))  # behind each elbow
+	_piston(arm_r, Vector3(.1, -.12, -.05), arm_r.get_meta("fore"), Vector3(.09, -.1, -.045))
 	_gun(weapon, with_cape)
+
+# ---- exosuit pistons: a sleeve on one segment and a rod on the next, sliding over each other as the joint bends ----
+var pistons: Array = []            # per piston: [node A, offset A, node B, offset B, sleeve, rod]
+func _piston(a: Node3D, oa: Vector3, b: Node3D, ob: Vector3) -> void:
+	var sl := MeshInstance3D.new(); var sm := CylinderMesh.new(); sm.top_radius = .017; sm.bottom_radius = .017; sm.height = 1.0
+	sm.radial_segments = 8; sm.rings = 1; sl.mesh = sm; sl.material_override = mats.dark; add_child(sl)
+	var rd := MeshInstance3D.new(); var rm := CylinderMesh.new(); rm.top_radius = .009; rm.bottom_radius = .009; rm.height = 1.0
+	rm.radial_segments = 8; rm.rings = 1; rd.mesh = rm; rd.material_override = mats.metal; add_child(rd)
+	pistons.append([a, oa, b, ob, sl, rd]); _piston_step(pistons[-1])
+
+func _piston_step(p: Array) -> void:
+	var A: Vector3 = _rel(p[0]) * (p[1] as Vector3); var B: Vector3 = _rel(p[2]) * (p[3] as Vector3)
+	var d := B - A; var L := d.length()
+	if L < .01: return
+	var u := d / L; var sl: MeshInstance3D = p[4]; var rd: MeshInstance3D = p[5]
+	var bs := Basis(Quaternion(Vector3.UP, u))
+	var ls: float = min(.15, L * .65); var lr: float = L * .7     # the sleeve stays put, the rod slides out of it
+	sl.transform = Transform3D(bs * Basis.from_scale(Vector3(1, ls, 1)), A + u * ls * .5)   # stretched along its own axis
+	rd.transform = Transform3D(bs * Basis.from_scale(Vector3(1, lr, 1)), B - u * lr * .5)
 
 func _gun(weapon: String, with_cape: bool) -> void:
 	gun = _node(body, Vector3.ZERO)
@@ -199,9 +221,9 @@ func _leg(side: int, cls: String) -> Node3D:
 	if hd_src:
 		var Kh := _node(L, Vector3(0, -.44, 0)); var Bh := _node(Kh, Vector3(0, -.42, 0))
 		L.set_meta("knee", Kh); L.set_meta("boot", Bh); return L
-	_part("thigh", L, mr)
+	_part("thigh", L, mr); _part("thigh__frame", L, mr)
 	_part("thigh__pouch_L" if cls == "L" else "thigh__plate_" + cls, L, mr)
-	var K := _node(L, Vector3(0, -.44, 0)); _part("shin", K, mr); _part("shin__greave_" + cls, K, mr)
+	var K := _node(L, Vector3(0, -.44, 0)); _part("shin", K, mr); _part("shin__greave_" + cls, K, mr); _part("shin__frame", K, mr)
 	var B := _node(K, Vector3(0, -.42, 0)); _part("boot", B, mr)
 	if cls == "D": _part("boot__sabaton_D", B, mr)
 	L.set_meta("knee", K); L.set_meta("boot", B); return L
@@ -212,9 +234,9 @@ func _arm(side: int, cls: String) -> Node3D:
 	if hd_src:
 		var Fh := _node(R, Vector3(0, -.3, 0)); R.set_meta("fore", Fh); R.set_meta("hand", _node(Fh, Vector3(0, -.27, 0)))
 		return R
-	_part("upperarm", R, mr)
+	_part("upperarm", R, mr); _part("upperarm__frame", R, mr)
 	if cls != "L": _part("upperarm__plate_" + cls, R, mr)
-	var F := _node(R, Vector3(0, -.3, 0)); _part("forearm", F, mr); _part("forearm__bracer_" + cls, F, mr)
+	var F := _node(R, Vector3(0, -.3, 0)); _part("forearm", F, mr); _part("forearm__bracer_" + cls, F, mr); _part("forearm__frame", F, mr)
 	var Hd := _node(F, Vector3(0, -.27, 0)); _part("hand", Hd, mr)
 	R.set_meta("fore", F); return R
 
@@ -294,6 +316,7 @@ func pose(dt: float, st: Dictionary) -> void:
 		else: hands = _climb_pose(u, st)
 	if not hands: _arms(rl, dd)
 	if cape: _cloth_step(dt, st.get("world_move", Vector3.ZERO))
+	for p in pistons: _piston_step(p)
 	if hd_skel: _hd_drive()
 
 func _blend_leg(L: Node3D, thigh: float, knee: float, boot: float, w: float) -> void:
