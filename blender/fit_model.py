@@ -11,7 +11,9 @@
 #   --arm DEG  how far the model's arms hang out from straight down (its A-pose), measured at the shoulder.
 #   --height M the model's full height, horns and crests included. The default is the Drakeguard kit's own full
 #              height, so a model drawn to the same proportions lands on the rig's joints.
-#   Depth and side are centred on the shins, so a backpack, cape or horns cannot push the body off the rig.
+#   Side and depth are set from the shins (15 to 35 per cent of the height), placed where the kit's own shins sit
+#   (0.031 m forward of the rig's centre). Horns and a backpack do not move the body. A dense full-length cape or a
+#   weapon held below the knee can still shift it, so check the fitted model in a test render.
 # MIT License. Copyright (c) 2026 Brian Guarino / Guarino Gaming Group (G3), a department of Guarino Industries LLC.
 import bpy, bmesh, sys, math
 from mathutils import Vector, Matrix
@@ -32,6 +34,7 @@ BONES = {'pelvis': ((0, .85, 0), (0, 1.08, 0)), 'torso': ((0, 1.08, 0), (0, 1.72
          'thigh': ((.13, .95, 0), (.13, .51, 0)), 'shin': ((.13, .51, 0), (.13, .12, 0)), 'boot': ((.13, .12, 0), (.13, 0, .12)),
          'upperarm': ((.31, 1.6, 0), (.31, 1.3, 0)), 'forearm': ((.31, 1.3, 0), (.31, 1.04, 0)), 'hand': ((.31, 1.04, 0), (.31, .9, 0))}
 
+SHIN_Z = .031                      # depth of the kit's shin band centre in game coordinates (measured, Drakeguard kit)
 LIMBS = ('thigh', 'shin', 'boot', 'upperarm', 'forearm', 'hand')
 
 def seg_dist(p, a, b):
@@ -47,6 +50,8 @@ def main():
     for o in meshes:
         if o.data.users > 1: o.data = o.data.copy()
         mw = o.matrix_world.copy(); o.parent = None; o.matrix_world = Matrix.Identity(4); o.data.transform(mw)
+        if mw.to_3x3().determinant() < 0: o.data.flip_normals()     # a mirroring transform turns the faces inside out
+    for o in [o for o in bpy.context.scene.objects if o.type != 'MESH']: bpy.data.objects.remove(o)   # nodes left over
     bpy.ops.object.select_all(action='DESELECT')
     for o in meshes: o.select_set(True)
     bpy.context.view_layer.objects.active = meshes[0]
@@ -62,7 +67,7 @@ def main():
     # centre on the shins (15 to 35 per cent of the height), where nothing but the legs can sit
     band = [v.co for v in me.vertices if lo.z + .15 * (hi.z - lo.z) <= v.co.z <= lo.z + .35 * (hi.z - lo.z)] or [v.co for v in me.vertices]
     centre = Vector(((min(c.x for c in band) + max(c.x for c in band)) / 2, (min(c.y for c in band) + max(c.y for c in band)) / 2, lo.z))
-    me.transform(Matrix.Scale(s, 4) @ Matrix.Translation(-centre))
+    me.transform(Matrix.Translation(G(0, 0, SHIN_Z)) @ Matrix.Scale(s, 4) @ Matrix.Translation(-centre))
     # cut by nearest bone, judged on the A-pose: arm bones are swung out by ARM degrees about the shoulder
     a = math.radians(ARM)
     def arm_pt(q, side):
@@ -102,7 +107,8 @@ def main():
         e = bpy.data.objects.new(name + '__hd', None); e.location = G(*J[name]); bpy.context.scene.collection.objects.link(e)
         bpy.context.view_layer.update(); mw = o.matrix_world.copy(); o.parent = e; o.matrix_world = mw
     counts = {n: len(o.data.polygons) for n, o in out}
-    assert len(counts) == len(out), 'two pieces share a joint name'
+    names = sorted(o.name for o in bpy.context.scene.objects if o.type == 'EMPTY')
+    if names != sorted(n + '__hd' for n, _ in out): sys.exit('FIT failed: joint names came out as %s' % names)
     print('FIT pieces', counts)
     bpy.ops.export_scene.gltf(filepath=DST, export_format='GLB', export_yup=True, export_apply=True, export_materials='EXPORT',
         export_normals=True, export_texcoords=True)

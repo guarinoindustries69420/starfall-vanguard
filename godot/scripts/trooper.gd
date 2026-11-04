@@ -70,6 +70,7 @@ func build(armor: String, helm: String, pal: Dictionary, with_cape: bool, weapon
 		head = _node(upper, Vector3(0, 1.82, .02)); _part("head__hd", head)
 		_gun(weapon, with_cape); return
 	armor = armor.trim_suffix("_hd")         # no fitted model on disk: wear the built kit of the same armor
+	cls = ARMOR_CLASS.get(armor, "M")
 	var pelvis := _node(lower, Vector3(0, .98, 0)); _part("pelvis", pelvis)
 	if armor == "drakeguard": _part("pelvis__tabard_D", pelvis)
 	leg_l = _leg(-1, cls); leg_r = _leg(1, cls)
