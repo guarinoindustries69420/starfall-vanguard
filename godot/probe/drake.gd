@@ -17,7 +17,10 @@ func _cam(i: int) -> void:
 	var a: float = [1.0, PI + .5, .75][i]; var dist: float = [4.6, 4.6, 1.6][i]; var y: float = [1.0, 1.0, 1.6][i]
 	cam.position = Vector3(sin(a) * dist, y + .25, cos(a) * dist); cam.look_at(Vector3(0, y, 0))
 func _process(dt: float) -> void:
-	t += dt; m.pose(1.0 / 60.0, {"aim": 0.0, "world_move": Vector3.ZERO})
+	t += dt
+	var st := {"aim": 0.0, "world_move": Vector3.ZERO}
+	if "--crouchwalk" in OS.get_cmdline_user_args(): st.merge({"moving": true, "speed": 2.0, "move_yaw": 0.0, "crouch": 1.0}, true)
+	m.pose(1.0 / 60.0, st)
 	if t > 1.0 and shot == 0: get_viewport().get_texture().get_image().save_png("user://t_drake_front.png"); shot = 1; _cam(1)
 	elif t > 1.3 and shot == 1: get_viewport().get_texture().get_image().save_png("user://t_drake_back.png"); shot = 2; _cam(2)
 	elif t > 1.6 and shot == 2: get_viewport().get_texture().get_image().save_png("user://t_drake_close.png"); get_tree().quit()

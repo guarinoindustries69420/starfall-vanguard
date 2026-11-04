@@ -64,6 +64,8 @@ func build(armor: String, helm: String, pal: Dictionary, with_cape: bool, weapon
 	tilt = _node(self, Vector3.ZERO); body = _node(tilt, Vector3.ZERO); upper = _node(body, Vector3.ZERO)
 	lower = _node(tilt, Vector3.ZERO)
 	hd_src = Game.hd_kit(armor) if armor.ends_with("_hd") else null
+	if hd_src and not _hd_valid(hd_src):
+		push_warning("%s.glb: skeleton does not match the trooper rig; wearing the built kit" % armor); hd_src = null
 	if hd_src:                                 # a skinned model replaces the whole built kit; the joints drive its bones
 		var pelvis_h := _node(lower, Vector3(0, .98, 0))
 		leg_l = _leg(-1, cls); leg_r = _leg(1, cls)
@@ -107,6 +109,21 @@ func _gun(weapon: String, with_cape: bool) -> void:
 	_arms(0.0, 0.0)
 
 # ---- the skinned model: each bone follows its joint node ----
+# the bones blender/skin_model.py writes, each with its parent
+const HD_PARENT := {"pelvis": "", "torso": "pelvis", "head": "torso", "thigh_l": "pelvis", "thigh_r": "pelvis",
+	"shin_l": "thigh_l", "shin_r": "thigh_r", "boot_l": "shin_l", "boot_r": "shin_r", "upperarm_l": "torso",
+	"upperarm_r": "torso", "forearm_l": "upperarm_l", "forearm_r": "upperarm_r", "hand_l": "forearm_l", "hand_r": "forearm_r"}
+
+func _hd_valid(src: Node3D) -> bool:
+	var sk := src.find_children("*", "Skeleton3D", true, false)
+	if sk.size() != 1: return false
+	var k: Skeleton3D = sk[0]
+	if k.get_bone_count() != HD_PARENT.size(): return false
+	for i in k.get_bone_count():
+		var nm := k.get_bone_name(i); var p := k.get_bone_parent(i)
+		if not HD_PARENT.has(nm) or HD_PARENT[nm] != (k.get_bone_name(p) if p >= 0 else ""): return false
+		if p > i: return false              # the drive assumes parents come first
+	return true
 # a node's transform in this trooper's space (works before the trooper is in the scene tree)
 func _rel(n: Node3D) -> Transform3D:
 	var t := Transform3D.IDENTITY

@@ -4,7 +4,9 @@
 #      height with feet on the floor, and centre it on its shins.
 #   2. Optionally thin it to about --faces N faces.
 #   3. Weight every vertex to its nearest bones of the rig (both sides), blending over BLEND metres near each joint,
-#      judged on the A-pose: arm bones are swung out by --arm degrees about the shoulder.
+#      judged on the A-pose: arm bones are swung out by --arm degrees about the shoulder. Two regions are pinned:
+#      anything inside the shoulder joint (the chest plate and its rim) stays off the upper arm, and cloth hanging on
+#      the midline in front of the legs (a tabard or loincloth) stays off the thighs and shins, so it follows the hips.
 #   4. Straighten the arms to the rig's rest pose through those same weights, so the shoulders bend instead of tearing.
 #   5. Export one skinned mesh on an armature whose bones sit on the rig's joints, named after them ("thigh_l", ...).
 # trooper.gd then drives each bone from the matching joint node every frame.
@@ -98,6 +100,10 @@ def main():
         if j in ARMS: b0, b1 = swing(b0, sd, a), swing(b1, sd, a)
         d = seg_dist(P, b0, b1)
         if sd: d[side != sd] = np.inf       # a limb bone only takes vertices on its own side of the body
+        if j == 'upperarm':                 # inside the shoulder joint is chest, not arm
+            d = d + np.clip((.30 - P[:, 0] * sd) / .08, 0.0, 1.0)
+        if j in ('thigh', 'shin'):          # midline cloth in front of the legs hangs from the hips
+            d = d + 1.0 * ((np.abs(P[:, 0]) < .115) & (P[:, 2] > .11) & (P[:, 1] > .4) & (P[:, 1] < 1.0))
         D[:, k] = d
     W = np.clip(1.0 - (D - D.min(1, keepdims=True)) / BLEND, 0.0, 1.0)
     keep = np.argsort(-W, 1)[:, 4:]; np.put_along_axis(W, keep, 0.0, 1)   # at most four bones per vertex
