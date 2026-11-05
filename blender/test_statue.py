@@ -5,8 +5,8 @@ import bpy, sys, math
 from mathutils import Matrix, Vector
 argv = sys.argv[sys.argv.index('--') + 1:]; SRC, DST, ARM = argv[0], argv[1], math.radians(float(argv[2]))
 bpy.ops.wm.read_factory_settings(use_empty=True); bpy.ops.import_scene.gltf(filepath=SRC)
-want = ['pelvis', 'pelvis__tabard_D', 'thigh', 'thigh__plate_D', 'shin', 'shin__greave_D', 'boot', 'boot__sabaton_D', 'torso',
-        'torso__chest_D', 'torso__belt', 'torso__belt_D', 'torso__pauld_D', 'torso__pack_D', 'upperarm', 'upperarm__plate_D',
+want = ['pelvis', 'pelvis__frame', 'thigh', 'thigh__plate_D', 'shin', 'shin__greave_D', 'boot', 'boot__sabaton_D', 'torso',
+        'torso__chest_D', 'torso__belt', 'torso__belt_D', 'torso__pauld_D', 'torso__spine', 'upperarm', 'upperarm__plate_D',
         'forearm', 'forearm__bracer_D', 'hand', 'head__neck', 'head__dragon']
 limbs = {'thigh', 'shin', 'boot', 'upperarm', 'forearm', 'hand'}
 keep = []

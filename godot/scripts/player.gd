@@ -6,7 +6,7 @@ extends Unit
 
 var aim_dir := Vector3(0, 0, 1)
 var mag := 32; var ammo := 32; var fire_t := 0.0; var reload_t := 0.0
-var suit := ""; var mods: Dictionary = {}         # the exosuit and its numbers
+var suit := ""; var mods: Dictionary = Game.suit_mod("vanguard")   # the exosuit and its numbers (set again by wear)
 var calm_t := 0.0                                  # time since the last hit (Trauma Injector)
 var plate_t := 0.0; var plate_cd := 0.0            # Reactive Plating: hardened time left, and recharge
 var dodge_t := 0.0; var dodge_cd := 0.0; var dodge_dir := Vector3.ZERO
@@ -22,10 +22,11 @@ func _ready() -> void:
 # put on an exosuit: its look and its numbers (also used by the tests to try each passive)
 func wear(id: String) -> void:
 	suit = id if Game.SUITS.has(id) else "vanguard"; mods = Game.suit_mod(suit); grenades = mods.grenades
+	plate_t = 0.0; plate_cd = 0.0; calm_t = 0.0; dodge_cd = 0.0
 	if model: model.queue_free()
 	var su: Dictionary = Game.SUITS[suit]
 	model = Trooper.new(); add_child(model)
-	model.build(su.kit, su.helm, Game.FACTIONS.wyrm, true, "rifle")
+	model.build(su.kit, su.helm, Game.suit_palette(suit), true, "rifle")
 
 func _input_vec() -> Vector2:
 	if Game.test_mode and test_input != Vector2.ZERO: return test_input
@@ -86,10 +87,10 @@ func _physics_process(dt: float) -> void:
 	if Input.is_action_just_pressed("roll") and not blk and not climbing() and dodge_t <= 0:
 		var dir := mv.normalized() if mv.length() > .1 else aim_dir
 		if not try_climb(dir, false) and dodge_cd <= 0 and mv.length() > .1:
-			dodge_t = .35; dodge_cd = mods.dive_cd; dodge_dir = mv.normalized(); want_crouch = false
+			dodge_t = Game.DIVE_TIME; dodge_cd = mods.dive_cd; dodge_dir = mv.normalized(); want_crouch = false
 	var steady := Input.is_action_pressed("steady")
 	var sprint := Input.is_action_pressed("sprint") and not steady and crouch < .5
-	var spd: float = 6.0 * mods.speed * (mods.sprint if sprint else 1.0) * (.55 if steady else 1.0) * lerp(1.0, .5, crouch)
+	var spd := move_speed(sprint, steady)
 	if dodge_t > 0:
 		dodge_t -= dt; move_unit(dt, dodge_dir, 11.0)
 	else:
@@ -115,17 +116,21 @@ func _physics_process(dt: float) -> void:
 		barrage_cd = mods.barrage_cd; mission.call_barrage(Vector3(aim_point.x, 0, aim_point.z), mods.barrage_lead); Game.say("barrage")
 	var moved := global_position - last_pos; last_pos = global_position
 	var st := {"aim": atan2(aim_dir.x, aim_dir.z), "moving": mv.length() > .1 and not climbing(), "speed": spd, "move_yaw": atan2(mv.x, mv.z),
-		"dodge": (1.0 - dodge_t / .35) if dodge_t > 0 else 0.0, "reload": (1.0 - reload_t / mods.reload) if reload_t > 0 else 0.0,
+		"dodge": (1.0 - dodge_t / Game.DIVE_TIME) if dodge_t > 0 else 0.0, "reload": (1.0 - reload_t / mods.reload) if reload_t > 0 else 0.0,
 		"fired": fired, "world_move": moved, "crouch": crouch}
 	st.merge(climb_state(), true)
 	model.pose(dt, st)
+
+# ground speed from the suit, sprinting or steadying, and how far down the crouch is
+func move_speed(sprint: bool, steady: bool) -> float:
+	return 6.0 * mods.speed * (mods.sprint if sprint else 1.0) * (.55 if steady else 1.0) * lerp(1.0, .5, crouch)
 
 # blast is true for explosions (Blast Dampers halve those)
 func hurt(d: float, blast := false) -> void:
 	if hp <= 0 or dodge_t > 0: return
 	var was := hp
 	d *= mods.taken * (mods.blast if blast else 1.0)
-	if mods.reactive and plate_t <= 0 and plate_cd <= 0 and hp - d < 35.0: plate_t = 3.0; plate_cd = 20.0; Game.say("plates", 20.0)
+	if mods.reactive and plate_t <= 0 and plate_cd <= 0 and hp >= 35.0 and hp - d < 35.0: plate_t = 3.0; plate_cd = 20.0; Game.say("plates", 20.0)
 	if plate_t > 0: d *= .5
 	hp -= d; calm_t = 0.0; Game.rumble(.4, .6, .15)
 	if was >= 35.0 and hp < 35.0 and hp > 0: Game.say("low_health", 30.0)

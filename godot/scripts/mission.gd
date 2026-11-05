@@ -446,7 +446,7 @@ func _process(dt: float) -> void:
 		var art := "ready" if player.barrage_cd <= 0 else "%d s" % int(ceil(player.barrage_cd))
 		var su: Dictionary = Game.SUITS[player.suit]; var pas: String = su.passive
 		if player.mods.reactive: pas += " ON" if player.plate_t > 0 else (" %d s" % int(ceil(player.plate_cd)) if player.plate_cd > 0 else " ready")
-		hud_label.text = "%s   %d / %d     Grenades %d     Artillery %s     Kills %d     %s: %s" % [wpn, player.ammo, player.mag, player.grenades, art, kills, su.name, pas]
+		hud_label.text = "%s   %d / %d     Grenades %d     Artillery %s     Kills %d\n%s: %s" % [wpn, player.ammo, player.mag, player.grenades, art, kills, su.name, pas]
 		hud_hint.text = "%s fire   %s steady   %s dive / vault / climb   %s crouch   %s reload   %s grenade   %s artillery   %s sprint   %s pause" % [
 			Game.prompt("fire"), Game.prompt("steady"), Game.prompt("roll"), Game.prompt("crouch"), Game.prompt("reload"),
 			Game.prompt("grenade"), Game.prompt("barrage"), Game.prompt("sprint"), Game.prompt("pause")]
@@ -464,7 +464,7 @@ func _hud() -> void:
 	hud_hint = Label.new(); hud_hint.anchor_top = 1.0; hud_hint.anchor_bottom = 1.0; hud_hint.position = Vector2(24, -40); hud_hint.offset_top = -40
 	hud_hint.add_theme_font_size_override("font_size", 16); hud_hint.modulate = Color(1, 1, 1, .9); hud.add_child(hud_hint)
 	# readable over any ground, even bright ice: a dark backing strip and an outline on every line of text
-	for pair in [[Vector2(12, 16), Vector2(720, 86), false], [Vector2(12, -50), Vector2(1100, 40), true]]:
+	for pair in [[Vector2(12, 16), Vector2(720, 112), false], [Vector2(12, -50), Vector2(1100, 40), true]]:
 		var back := ColorRect.new(); back.color = Color(0, 0, 0, .45); back.position = pair[0]; back.size = pair[1]
 		if pair[2]: back.anchor_top = 1.0; back.anchor_bottom = 1.0; back.offset_top = -50; back.offset_bottom = -10
 		back.mouse_filter = Control.MOUSE_FILTER_IGNORE; hud.add_child(back); hud.move_child(back, 0)
@@ -485,32 +485,40 @@ func _pad_button(b: int, down: bool) -> void:
 
 func _at(t: float, dt: float) -> bool: return test_t - dt < t and test_t >= t
 
-# every exosuit builds, and each passive does what its card says (tried on the live player, then put back)
+# every exosuit builds with its exosuit frame, and each suit and passive changes how the live player plays
+# (each is put on the player in turn; the Trauma Injector runs across the first seconds of the test)
 func _suit_checks() -> void:
 	var P = player; var keep: String = P.suit
-	var built := 0
+	var built := 0; var frame := ["pelvis__frame", "thigh__frame", "shin__frame", "upperarm__frame", "forearm__frame", "torso__spine"]
 	for id in Game.SUIT_ORDER:
 		P.wear(id)
-		if P.model.leg_l != null and P.model.gun != null: built += 1
-	_check("every exosuit builds", built == Game.SUIT_ORDER.size(), "%d of %d" % [built, Game.SUIT_ORDER.size()])
-	var M := func(id: String) -> Dictionary: return Game.suit_mod(id)
-	var ok: bool = M.call("pathfinder").speed > M.call("vanguard").speed and M.call("vanguard").speed > M.call("bulwark").speed \
-		and M.call("pathfinder").taken > M.call("vanguard").taken and M.call("vanguard").taken > M.call("bulwark").taken
-	_check("light is fastest and thinnest, heavy slowest and toughest", ok, "speed %.2f %.2f %.2f, damage taken %.2f %.2f %.2f" % [M.call("pathfinder").speed, M.call("vanguard").speed, M.call("bulwark").speed, M.call("pathfinder").taken, M.call("vanguard").taken, M.call("bulwark").taken])
-	var res := []
+		var parts := frame.filter(func(n): return P.model.find_child(n, true, false) != null).size()
+		if P.model.leg_l != null and P.model.gun != null and parts == frame.size() and P.model.pistons.size() == 4: built += 1
+	_check("every exosuit builds with its frame and four pistons", built == Game.SUIT_ORDER.size(), "%d of %d" % [built, Game.SUIT_ORDER.size()])
+	var spd := {}
+	for id in ["pathfinder", "vanguard", "bulwark"]: P.wear(id); spd[id] = [P.move_speed(false, false), P.move_speed(true, false), P.mods.taken]
+	_check("light is fastest and thinnest, heavy slowest and toughest", spd.pathfinder[0] > spd.vanguard[0] and spd.vanguard[0] > spd.bulwark[0]
+		and spd.pathfinder[2] > spd.vanguard[2] and spd.vanguard[2] > spd.bulwark[2], "walk %.2f %.2f %.2f m/s" % [spd.pathfinder[0], spd.vanguard[0], spd.bulwark[0]])
+	P.wear("vanguard"); var sv: float = P.move_speed(true, false)
+	_check("Servo Striders sprint faster", spd.pathfinder[1] > sv * 1.3, "%.2f against %.2f m/s" % [spd.pathfinder[1], sv])
+	var chain := Game.SUIT_ORDER.all(func(id): return Game.suit_mod(id).dive_cd >= Game.DIVE_TIME + .099)
+	_check("no suit can dive again before the last dive ends", chain, "Pathfinder %.2f s, dive %.2f s" % [Game.suit_mod("pathfinder").dive_cd, Game.DIVE_TIME])
 	P.wear("bulwark"); P.hp = 100.0; P.hurt(100.0, true); var hb: float = 100.0 - P.hp
 	P.wear("sentinel"); P.hp = 100.0; P.hurt(100.0, true); var hs: float = 100.0 - P.hp
-	res.append(["Blast Dampers halve blast damage", abs(hb - hs * .5) < .01, "%.1f against %.1f for another heavy" % [hb, hs]])
+	_check("Blast Dampers halve blast damage", abs(hb - hs * .5) < .01, "%.1f against %.1f for another heavy" % [hb, hs])
 	P.wear("drakeguard"); P.hp = 50.0; P.hurt(30.0); var first: float = 50.0 - P.hp; var on: float = P.plate_t; P.hurt(10.0); var second: float = 50.0 - first - P.hp
-	res.append(["Reactive Plating hardens under 35 health", on > 2.9 and abs(first - 30.0 * .7 * .5) < .01 and abs(second - 10.0 * .7 * .5) < .01, "first hit %.2f, next %.2f, plates %.1f s" % [first, second, on]])
-	res.append(["Ordnance Rack carries 7 grenades", P.grenades == 4 and Game.suit_mod("ashwalker").grenades == 7 and Game.suit_mod("ashwalker").grenade_r > 1.3, ""])
-	res.append(["Autoloader reloads faster", Game.suit_mod("vanguard").reload < Game.suit_mod("warden").reload * .6, "%.2f s" % Game.suit_mod("vanguard").reload])
-	res.append(["Uplink Array calls artillery sooner", Game.suit_mod("sentinel").barrage_cd < 30.0 and Game.suit_mod("sentinel").barrage_lead < 2.0, ""])
-	res.append(["Servo Striders sprint faster and dive sooner", Game.suit_mod("pathfinder").sprint > 1.8 and Game.suit_mod("pathfinder").dive_cd < Game.suit_mod("ashwalker").dive_cd, ""])
-	P.wear("warden"); P.hp = 40.0; P.calm_t = 10.0
-	test.regen_from = 40.0
-	for r in res: _check(r[0], r[1], r[2])
-	test.keep_suit = keep
+	P.wear("drakeguard"); P.hp = 30.0; P.hurt(5.0); var below: float = P.plate_t
+	_check("Reactive Plating hardens only on the hit that crosses 35", on > 2.9 and below == 0.0 and abs(first - 30.0 * .7 * .5) < .01 and abs(second - 10.0 * .7 * .5) < .01,
+		"crossing hit %.2f, next %.2f, plates %.1f s; at 30 health a hit leaves plates %.1f s" % [first, second, on, below])
+	P.wear("ashwalker"); var ga: int = P.grenades; P.wear("vanguard"); var gv: int = P.grenades
+	_check("Ordnance Rack carries 7 grenades", ga == 7 and gv == 4, "%d against %d" % [ga, gv])
+	for id in ["vanguard", "warden"]:                # an empty magazine starts a reload on the next tick
+		P.wear(id); P.ammo = 0; P.reload_t = 0.0; P._physics_process(1.0 / 60.0); spd[id] = P.reload_t
+	_check("Autoloader reloads faster", spd.vanguard < spd.warden * .6 and spd.vanguard > 0, "%.2f s against %.2f s" % [spd.vanguard, spd.warden])
+	P.ammo = P.mag; P.reload_t = 0.0
+	_check("Uplink Array calls artillery sooner", Game.suit_mod("sentinel").barrage_cd < 30.0 and Game.suit_mod("sentinel").barrage_lead < 2.0, "")
+	P.wear("warden"); P.hp = 40.0                    # calm timer starts at 0: no healing for 4 s, then 6 a second
+	test.regen_from = 40.0; test.keep_suit = keep
 
 func _test(dt: float) -> void:
 	test_t += dt
@@ -522,8 +530,16 @@ func _test(dt: float) -> void:
 			var c0: Array = b.craters[0]; _check("saved crater is dug in on reload", terrain.height_at(c0[0], c0[1]) < -.3, "depth %.2f" % terrain.height_at(c0[0], c0[1]))
 		test.start = P.global_position
 		_suit_checks()
-	if _at(.6, dt):
-		_check("Trauma Injector heals after 4 s without a hit", P.hp > test.regen_from + 2.0, "%.1f -> %.1f" % [test.regen_from, P.hp])
+	if test.has("regen_from") and test_t < 5.0:      # watch every frame: no healing until 4 s after the last hit
+		var prev: float = test.get("regen_prev", test.regen_from)
+		if P.hp > prev + 1e-6:
+			test.healed = true                         # what was gained can only have come after 4 s of calm
+			var most: float = P.mods.regen * max(0.0, P.calm_t - 4.0) + 1e-4
+			if P.hp - prev > most: test.early = true; test.early_at = "calm %.2f s, gained %.2f" % [P.calm_t, P.hp - prev]
+		test.regen_prev = P.hp
+	if _at(5.0, dt):
+		_check("Trauma Injector waits 4 s without a hit, then heals", test.get("healed", false) and not test.get("early", false),
+			"%.1f -> %.1f, healed early: %s %s" % [test.regen_from, P.hp, test.get("early", false), test.get("early_at", "")])
 		P.wear(test.keep_suit); P.hp = 100.0
 	# 1. controller: left stick moves, right stick aims, Circle crouches
 	if _at(.1, dt): _pad_axis(JOY_AXIS_LEFT_X, 1.0); _pad_axis(JOY_AXIS_RIGHT_X, -1.0)

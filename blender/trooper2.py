@@ -152,8 +152,25 @@ def chest(k,rx,ry,rz,th):
     ring('c%s_collar'%k,(0,1.665 if k!='H' else 1.67,0),.1 if k!='H' else .115,.085 if k!='H' else .1,.075 if k!='H' else .1,.016,'trim',g)
     if k=='H':
         for s in(-1,1):plate('cH_rib%d'%s,(s*(rx-.02),cy-.06,0),(.05,.12,rz*.8),'base',g,sq=.55,cuts=[((-s*.0,0,0),(-s,0,0))],thick=.02,seg=11,rings=7)
+def slab_chest(k,rx,ry,rz,mat_front='base',mat_trim='trim'):
+    # faceted heavy chest: a front slab angled back at the top, angled side cheeks, a raised keel, a flat back slab
+    # and stacked abdomen plates; no rounded shells (exosuit pass)
+    g='torso__chest_'+k;cy=1.43
+    box('c%s_front'%k,(0,cy+.02,rz*.78),(rx*1.45,ry*1.15,.05),mat_front,g,bevel=.012,rot=(-.14,0,0))
+    box('c%s_upper'%k,(0,cy+ry*.62,rz*.45),(rx*1.3,.05,rz*.75),mat_front,g,bevel=.01,rot=(.35,0,0))
+    for s in(-1,1):
+        box('c%s_cheek%d'%(k,s),(s*rx*.86,cy-.01,rz*.3),(.05,ry*1.45,rz*1.0),mat_front,g,bevel=.01,rot=(0,s*.55,0))
+        box('c%s_side%d'%(k,s),(s*rx*.98,cy-.02,-rz*.25),(.045,ry*1.35,rz*.9),mat_trim,g,bevel=.008)
+        box('c%s_vent%d'%(k,s),(s*rx*.42,cy+.06,rz*.78+.03),(rx*.32,.018,.02),'dark',g,bevel=.004,rot=(-.14,0,0))
+    box('c%s_keel'%k,(0,cy-.01,rz*.78+.03),(.035,ry*1.0,.03),mat_trim,g,bevel=.006,rot=(-.14,0,0))
+    box('c%s_back'%k,(0,cy,-rz*.72),(rx*1.6,ry*1.55,.05),mat_front,g,bevel=.012)
+    for i in range(3):
+        y=cy-ry*.8-.04-i*.055
+        box('c%s_lame%d'%(k,i),(0,y,rz*.55-i*.01),(rx*1.25-i*.03,.045,.05),mat_front if i%2==0 else mat_trim,g,bevel=.008,rot=(.08,0,0))
+        for s in(-1,1):box('c%s_lameS%d_%d'%(k,s,i),(s*(rx*.62-i*.015),y,rz*.1),(.04,.045,rz*.8),mat_trim,g,bevel=.006,rot=(0,s*.5,0))
+    ring('c%s_collar'%k,(0,1.67,0),.115,.1,.08,.016,mat_trim,g)
 chest('M',.215,.175,.135,.024)
-chest('H',.245,.19,.16,.032)
+slab_chest('H',.245,.19,.16)
 # light: plate carrier over the suit
 g='torso__chest_L'
 ell('cL_plate',(0,1.43,0),(.215,.17,.15),'base','torso__chest_L',seg=17,rings=11,cuts=[((0,0,.05),(0,0,-1)),((.13,0,0),(1,0,0)),((-.13,0,0),(-1,0,0)),((0,1.57,0),(0,1,0)),((0,1.28,0),(0,-1,0))],thick=.025,bevel=.005)
@@ -354,28 +371,12 @@ def roundel(name,objname,x,y,z0,grp,r=.028,d=(0,0,-1)):
     b2=p+n*.016;tube(name+'b',(b.x,b.y,b.z),(b2.x,b2.y,b2.z),r*.5,r*.38,'gold',grp,verts=14,rings=1,angle=50)
 def studs(objname,pts,grp,d=(0,0,-1),r=.0085):rivets(objname,pts,grp,'gold',d=d,r=r)
 DK='D'
-# breastplate
-g='torso__chest_D';cy=1.43;rx,ry,rz=.238,.188,.16
-FRONT=dict(sq=.55,taper=.2,dz=.03)
-plate('cD_front',(0,cy,0),(rx,ry,rz),'base',g,cuts=[((0,0,.02),(0,0,-1)),((0,ry*.88,0),(0,1,0)),((0,-ry*.8,0),(0,-1,0))],thick=.028,seg=20,rings=14,**FRONT)
-plate('cD_back',(0,cy,-.005),(rx*.97,ry*.95,rz*.92),'base',g,sq=.55,taper=.15,cuts=[((0,0,-.03),(0,0,1)),((0,ry*.85,0),(0,1,0)),((0,-ry*.8,0),(0,-1,0))],thick=.026)
-band('cD_rimTop',(0,cy,0),(rx,ry,rz),'trim',g,[((0,0,.02),(0,0,-1)),((0,ry*.9,0),(0,1,0)),((0,ry*.77,0),(0,-1,0))],**FRONT)
-band('cD_rimBot',(0,cy,0),(rx,ry,rz),'trim',g,[((0,0,.02),(0,0,-1)),((0,-ry*.68,0),(0,1,0)),((0,-ry*.82,0),(0,-1,0))],**FRONT)
-band('cD_rimSide',(0,cy,0),(rx,ry,rz),'trim',g,[((0,0,.02),(0,0,-1)),((0,0,.052),(0,0,1)),((0,ry*.88,0),(0,1,0)),((0,-ry*.8,0),(0,-1,0))],**FRONT)
-plate('cD_keel',(0,cy-.01,rz+.015),(.02,ry*.7,.018),'trim',g,sq=.5,cuts=[((0,0,0),(0,0,-1))],thick=.008,seg=10,rings=8)
-bpy.context.view_layer.update()
-
-
-
-# abdomen lames, each with a gold lower edge
-for i in range(3):
-    y=cy-ry*.8-.034-i*.056;lr=(rx*.8-i*.014,.044,rz*.9)
-    plate('cD_lame%d'%i,(0,y,-.005),lr,'base',g,sq=.5,cuts=[((0,0,0),(0,0,-1)),((0,.03,0),(0,1,0)),((0,-.03,0),(0,-1,0))],thick=.02,seg=16,rings=8)
-    band('cD_lameG%d'%i,(0,y,-.005),lr,'trim',g,[((0,0,0),(0,0,-1)),((0,-.019,0),(0,1,0)),((0,-.032,0),(0,-1,0))],sq=.5,seg=18,rings=10,k=1.02)
+# breastplate: the faceted heavy chest, a little broader
+slab_chest('D',.255,.195,.17)
+g='torso__chest_D';cy=1.43;rx,ry,rz=.255,.195,.17
 for s in(-1,1):box('cD_strap%d'%s,(s*rx*.96,cy-.02,-.005),(.024,.16,.12),'leather',g,bevel=.006)
 # maroon gorget and a gold collar
-ring('cD_gorget',(0,1.672,0),.108,.094,.08,.02,'cloth',g,verts=20)
-ring('cD_collarG',(0,1.715,0),.113,.099,.012,.007,'trim',g,verts=20)
+ring('cD_gorget',(0,1.672,0),.108,.094,.08,.02,'dark',g,verts=20)
 # shoulders: actuator housings with three flat layered plates (no rounded pauldrons)
 pauld('D',(.14,.06,.16),3)
 # upper arm plate, elbow cop and bracer, all gold-banded
@@ -387,15 +388,15 @@ tube('brD',(AX,1.27,0),(AX,1.07,0),.074,.064,'base',g,caps=False,thick=.018,ring
 ring('brD_g1',(AX,1.262,0),.079,.086,.016,.007,'trim',g)
 ring('brD_g2',(AX,1.08,0),.069,.075,.016,.007,'trim',g)
 ell('epD',(AX,1.3,-.035),(.06,.065,.05),'base',g,cuts=[((0,0,-.01),(0,0,1))],thick=.016)
-ring('epD_g',(AX,1.3,-.04),.062,.05,.012,.006,'gold',g,axis='zf')
+ring('epD_g',(AX,1.3,-.04),.062,.05,.012,.006,'trim',g,axis='zf')
 # leather belt gear: pouch, holster, buckle
 g='torso__belt_D'
 ring('blD',(0,1.03,0),.178,.132,.055,.014,'leather',g,verts=22)
-box('blD_buckle',(0,1.03,.15),(.062,.05,.02),'gold',g,bevel=.008)
+box('blD_buckle',(0,1.03,.15),(.062,.05,.02),'metal',g,bevel=.008)
 box('blD_pouch',(-.19,.97,.06),(.06,.1,.075),'leather',g,bevel=.014,rot=(0,.4,0))
 box('blD_flap',(-.19,1.015,.075),(.064,.03,.08),'leather',g,bevel=.008,rot=(0,.4,0))
 box('blD_holster',(.2,.9,.02),(.05,.17,.085),'leather',g,bevel=.014)
-box('blD_hstrap',(.2,.96,.02),(.056,.02,.09),'gold',g,bevel=.004)
+box('blD_hstrap',(.2,.96,.02),(.056,.02,.09),'leather',g,bevel=.004)
 box('blD_rear',(0,1.0,-.14),(.13,.07,.045),'leather',g,bevel=.012)
 # thigh tassets with gold hems
 g='thigh__plate_D'

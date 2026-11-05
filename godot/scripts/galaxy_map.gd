@@ -43,6 +43,7 @@ var ui: CanvasLayer; var title: Label; var counts: RichTextLabel; var info: Rich
 var terr: ColorRect
 var cap_cycle := 0
 var test_t := 0.0
+var test_suit0 := ""
 
 func _ready() -> void:
 	name = "Galaxy"
@@ -94,8 +95,8 @@ func _refresh() -> void:
 	counts.text = t
 	if sel >= 0: info.text = _describe(sel)
 	var pad := Game.using_pad
-	hint.text = ("Left stick select   Right stick pan   L2 / R2 zoom   L1 / R1 capitals   Cross drop in   Options menu" if pad
-		else "Click select   Drag or WASD pan   Wheel zoom   Q / E capitals   Enter or double-click drop in   Esc menu")
+	hint.text = ("Left stick select   Right stick pan   L2 / R2 zoom   L1 / R1 capitals   Triangle suit   Cross drop in   Options menu" if pad
+		else "Click select   Drag or WASD pan   Wheel zoom   Q / E capitals   Tab suit   Enter or double-click drop in   Esc menu")
 	queue_redraw()
 
 func _describe(i: int) -> String:
@@ -243,12 +244,16 @@ func _checks() -> void:
 func _test(dt: float) -> void:
 	if test_t == 0.0:
 		_checks()
-		var s0 := Game.suit; next_suit(); var s1 := Game.suit
-		var f := FileAccess.open(Game.CAMPAIGN_PATH, FileAccess.READ); var d = JSON.parse_string(f.get_as_text()) if f else null
-		print("CHECK ", "PASS " if s1 != s0 and d is Dictionary and d.get("suit", "") == s1 and counts.text.contains(Game.SUITS[s1].name) else "FAIL ",
-			"Triangle changes the exosuit, the panel shows it and the campaign saves it  ", "%s -> %s" % [s0, s1])
-		Game.suit = s0; Game.save_campaign(); _refresh()
+		test_suit0 = Game.suit                       # press Tab for real; checked a few frames later
+		var ev := InputEventKey.new(); ev.keycode = KEY_TAB; ev.physical_keycode = KEY_TAB; ev.pressed = true; Input.parse_input_event(ev)
+		var up := InputEventKey.new(); up.keycode = KEY_TAB; up.physical_keycode = KEY_TAB; up.pressed = false; Input.parse_input_event(up)
 	test_t += dt
+	if test_t > .3 and test_t - dt <= .3:
+		var s1 := Game.suit; var saved := s1 != test_suit0 and counts.text.contains(Game.SUITS[s1].name)
+		Game.suit = test_suit0; Game.load_campaign()   # what a fresh start would read back from the campaign file
+		print("CHECK ", "PASS " if saved and Game.suit == s1 else "FAIL ",
+			"Tab changes the exosuit, the panel shows it and a fresh start loads it back  ", "%s -> %s, loaded %s" % [test_suit0, s1, Game.suit])
+		Game.suit = test_suit0; Game.save_campaign(); _refresh()
 	var shots := {0.6: "galaxy_full", 1.2: "galaxy_close", 1.8: "galaxy_neutral"}
 	for at in shots:
 		if test_t - dt < at and test_t >= at:

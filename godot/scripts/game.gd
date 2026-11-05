@@ -22,7 +22,7 @@ const SUIT_WEIGHT := {
 }
 const SUITS := {
 	"pathfinder": {"name": "Pathfinder", "weight": "light", "kit": "pathfinder", "helm": "hood", "passive": "Servo Striders",
-		"desc": "Leg servos: sprint 30% faster and the dive recovers twice as fast."},
+		"desc": "Leg servos: sprint 30% faster and the dive recovers faster (0.45 s instead of 0.6)."},
 	"ashwalker": {"name": "Ashwalker", "weight": "light", "kit": "ashwalker", "helm": "mask", "passive": "Ordnance Rack",
 		"desc": "Hip racks: three extra grenades, and each blast reaches 40% further."},
 	"vanguard": {"name": "Vanguard", "weight": "medium", "kit": "vanguard", "helm": "visor", "passive": "Autoloader",
@@ -34,9 +34,15 @@ const SUITS := {
 	"sentinel": {"name": "Sentinel", "weight": "heavy", "kit": "sentinel", "helm": "antenna", "passive": "Uplink Array",
 		"desc": "Long-range mast: artillery is ready again in 25 s instead of 45, and the first shell lands a second sooner."},
 	"drakeguard": {"name": "Drakeguard", "weight": "heavy", "kit": "drakeguard", "helm": "dragon", "passive": "Reactive Plating",
-		"desc": "A hit that would drop you under 35 health hardens the plates: half damage for 3 s. Recharges in 20 s."},
+		"desc": "The hit that takes you from 35 health or more to under 35 hardens the plates: that hit and the next 3 s do half damage. Recharges in 20 s."},
 }
+const DIVE_TIME := .35             # a dive lasts this long; no suit may dive again sooner than DIVE_TIME + 0.1
 const SUIT_ORDER := ["pathfinder", "ashwalker", "vanguard", "warden", "bulwark", "sentinel", "drakeguard"]
+
+# the colours the player's suits wear: gunmetal and hazard orange, the Drakeguard charcoal and ember red
+const SUIT_PALETTE := {"base": Color("4c535b"), "trim": Color("262a30"), "acc": Color("e07a2a")}
+const DRAKE_PALETTE := {"base": Color("3a3433"), "trim": Color("1f1b1b"), "acc": Color("c8452a")}
+static func suit_palette(id: String) -> Dictionary: return DRAKE_PALETTE if id == "drakeguard" else SUIT_PALETTE
 
 # the numbers a suit plays with: its weight class, then its passive on top
 static func suit_mod(id: String) -> Dictionary:
@@ -44,7 +50,7 @@ static func suit_mod(id: String) -> Dictionary:
 	var m := {"speed": w.speed, "taken": w.taken, "dive_cd": w.dive_cd, "sprint": 1.45, "reload": 1.7, "grenades": 4,
 		"grenade_r": 1.0, "barrage_cd": 45.0, "barrage_lead": 2.0, "blast": 1.0, "regen": 0.0, "reactive": false}
 	match su.passive:
-		"Servo Striders": m.sprint = 1.45 * 1.3; m.dive_cd = w.dive_cd * .5
+		"Servo Striders": m.sprint = 1.45 * 1.3; m.dive_cd = max(DIVE_TIME + .1, w.dive_cd * .5)   # never back to back
 		"Ordnance Rack": m.grenades = 7; m.grenade_r = 1.4
 		"Autoloader": m.reload = 1.7 * .55
 		"Trauma Injector": m.regen = 6.0
@@ -110,13 +116,16 @@ func _ready() -> void:
 			if v.is_valid_int() and int(v) >= 0 and int(v) < galaxy.worlds.size():
 				current_world = int(v); enemy_faction = galaxy.foe_of(current_world, player_faction)
 			else: push_warning("--sv-world needs a world number from 0 to %d; ignored" % (galaxy.worlds.size() - 1))
-	if not fresh and FileAccess.file_exists(CAMPAIGN_PATH):
-		var f := FileAccess.open(CAMPAIGN_PATH, FileAccess.READ)
-		var d = JSON.parse_string(f.get_as_text()) if f else null
-		if d is Dictionary and d.get("seed", -1) == GALAXY_SEED:
-			galaxy.apply_owners(d.get("owners", {})); hm = d.get("hearts", {})
-			if SUITS.has(d.get("suit", "")): suit = d.suit
+	if not fresh and FileAccess.file_exists(CAMPAIGN_PATH): load_campaign()
 	elif fresh and FileAccess.file_exists(CAMPAIGN_PATH): DirAccess.remove_absolute(ProjectSettings.globalize_path(CAMPAIGN_PATH))
+
+# owners, hearts and the chosen exosuit from the campaign file
+func load_campaign() -> void:
+	var f := FileAccess.open(CAMPAIGN_PATH, FileAccess.READ)
+	var d = JSON.parse_string(f.get_as_text()) if f else null
+	if d is Dictionary and d.get("seed", -1) == GALAXY_SEED:
+		galaxy.apply_owners(d.get("owners", {})); hm = d.get("hearts", {})
+		if SUITS.has(d.get("suit", "")): suit = d.suit
 
 func save_campaign() -> void:
 	var f := FileAccess.open(CAMPAIGN_PATH, FileAccess.WRITE)

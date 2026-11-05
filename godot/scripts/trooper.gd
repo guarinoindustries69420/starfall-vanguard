@@ -70,7 +70,7 @@ func build(armor: String, helm: String, pal: Dictionary, with_cape: bool, weapon
 	mats.visor.emission_enabled = true; mats.visor.emission = pal.acc * .12
 	mats.glow.emission_enabled = true; mats.glow.emission = pal.acc; mats.glow.emission_energy_multiplier = 3.0
 	mats.cape.cull_mode = BaseMaterial3D.CULL_DISABLED; mats.cape.vertex_color_use_as_albedo = false
-	if armor.begins_with("drakeguard"): mats.cape.albedo_color = Color("5a1a22")   # a maroon cape to match the tabard
+	if armor.begins_with("drakeguard"): mats.cape.albedo_color = Color("3a1c18")   # a darker cape for the Drakeguard
 	tilt = _node(self, Vector3.ZERO); body = _node(tilt, Vector3.ZERO); upper = _node(body, Vector3.ZERO)
 	lower = _node(tilt, Vector3.ZERO)
 	hd_src = Game.hd_kit(armor) if armor.ends_with("_hd") else null

@@ -15,7 +15,7 @@ func _ready() -> void:
 	for i in n:
 		var su: Dictionary = Game.SUITS[Game.SUIT_ORDER[i]]
 		var m := Trooper.new(); add_child(m); m.position = Vector3((i - (n - 1) / 2.0) * 1.3, 0, 0)
-		m.build(su.kit, su.helm, Game.FACTIONS.wyrm, "--cape" in OS.get_cmdline_user_args(), "rifle"); models.append(m)
+		m.build(su.kit, su.helm, Game.suit_palette(Game.SUIT_ORDER[i]), "--cape" in OS.get_cmdline_user_args(), "rifle"); models.append(m)
 	cam = Camera3D.new(); cam.fov = 30; add_child(cam); _cam(0)
 func _cam(i: int) -> void:
 	var z := 10.4 if i == 0 else -10.4

@@ -27,7 +27,7 @@ func _ready() -> void:
 		_button(v, "Forfeit this event (counts as a loss)", _forfeit)
 	_button(v, "Quit to desktop", func(): get_tree().quit())
 	var c := Label.new(); c.add_theme_font_size_override("font_size", 15); c.modulate = Color(1, 1, 1, .8)
-	c.text = "PS5 controller: left stick move, L3 sprint, right stick aim, R2 fire, L2 steady aim,\nR1 grenade, L1 artillery, Cross dive, vault or climb, Circle crouch, Square reload, Options pause.\n\nKeyboard and mouse: WASD move, Shift sprint, mouse aim, left button fire, right button steady aim,\nG grenade, B artillery, Space dive, vault or climb, C crouch, R reload, Esc pause, F11 full screen."
+	c.text = "PS5 controller: left stick move, L3 sprint, right stick aim, R2 fire, L2 steady aim,\nR1 grenade, L1 artillery, Cross dive, vault or climb, Circle crouch, Square reload, Options pause,\nTriangle change exosuit (war map).\n\nKeyboard and mouse: WASD move, Shift sprint, mouse aim, left button fire, right button steady aim,\nG grenade, B artillery, Space dive, vault or climb, C crouch, R reload, Esc pause, F11 full screen,\nTab change exosuit (war map)."
 	v.add_child(c)
 	panel.visible = false
 
